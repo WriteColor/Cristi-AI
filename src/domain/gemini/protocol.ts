@@ -11,7 +11,7 @@ export const liveServerMessageSchema = z.object({
       inlineData: z.object({ data: z.string(), mimeType: z.string().optional() }).optional(),
     })).max(1000).optional() }).optional(),
   }).optional(),
-  toolCall: z.object({ functionCalls: z.array(z.object({ id: z.string(), name: z.string(), args: z.record(z.unknown()).default({}) })).max(100) }).optional(),
+  toolCall: z.object({ functionCalls: z.array(z.object({ id: z.string(), name: z.string(), args: z.record(z.string(), z.unknown()).default({}) })).max(100) }).optional(),
   toolCallCancellation: z.object({ ids: z.array(z.string()).max(100) }).optional(),
   goAway: z.object({ timeLeft: z.string().optional() }).optional(),
   interactionStatus: z.enum(['IN_PROGRESS', 'IDLE']).optional(),

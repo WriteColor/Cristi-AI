@@ -21,39 +21,18 @@ try {
 
 // ── Roster of All 30 Gemini Live Voices ──────────────────────────────────────
 const VOICES_CATALOG = [
-  // Femeninas (14)
+  // Femeninas (11)
   { name: 'Aoede', gender: 'Femenina', category: 'Femeninas', trait: 'Breezy, natural, mid-pitch', description: 'Voz relajada, fluida y con tono natural.' },
-  { name: 'Autonoe', gender: 'Femenina', category: 'Femeninas', trait: 'Bright and cheerful', description: 'Brillante, alegre y vivaz.' },
-  { name: 'Callirrhoe', gender: 'Femenina', category: 'Femeninas', trait: 'Friendly and easy-going', description: 'Amigable, accesible y cercana.' },
   { name: 'Despina', gender: 'Femenina', category: 'Femeninas', trait: 'Smooth, warm, gentle', description: 'Suave, cálida y envolvente.' },
+  { name: 'Sulafat', gender: 'Femenina', category: 'Femeninas', trait: 'Warm and approachable', description: 'Cálida, empática y comprensiva.' },
+  { name: 'Vindemiatrix', gender: 'Femenina', category: 'Femeninas', trait: 'Gentle and delicate', description: 'Delicada, suave y calmada.' },
+  { name: 'Callirrhoe', gender: 'Femenina', category: 'Femeninas', trait: 'Friendly and easy-going', description: 'Amigable, accesible y cercana.' },
   { name: 'Erinome', gender: 'Femenina', category: 'Femeninas', trait: 'Clear and articulate', description: 'Clara, precisa y profesional.' },
-  { name: 'Gacrux', gender: 'Femenina', category: 'Femeninas', trait: 'Mature and steady', description: 'Madura, firme y serena.' },
   { name: 'Kore', gender: 'Femenina', category: 'Femeninas', trait: 'Strong, firm, calm', description: 'Firme, segura y tranquila.' },
   { name: 'Laomedeia', gender: 'Femenina', category: 'Femeninas', trait: 'Positive and upbeat', description: 'Positiva, entusiasta y animada.' },
   { name: 'Leda', gender: 'Femenina', category: 'Femeninas', trait: 'Youthful and energetic', description: 'Juvenil, dinámica y enérgica.' },
-  { name: 'Sulafat', gender: 'Femenina', category: 'Femeninas', trait: 'Warm and approachable', description: 'Cálida, empática y comprensiva.' },
-  { name: 'Vindemiatrix', gender: 'Femenina', category: 'Femeninas', trait: 'Gentle and delicate', description: 'Delicada, suave y calmada.' },
-  { name: 'Zephyr', gender: 'Femenina', category: 'Femeninas', trait: 'Bright and clear', description: 'Luminosa, articulada y directa.' },
-  { name: 'Achernar', gender: 'Femenina', category: 'Femeninas', trait: 'Soft and warm', description: 'Aterciopelada, dulce y tranquila.' },
   { name: 'Pulcherrima', gender: 'Femenina', category: 'Femeninas', trait: 'Forward and animated', description: 'Expresiva, cautivadora y vivaz.' },
-
-  // Masculinas (16)
-  { name: 'Achird', gender: 'Masculina', category: 'Masculinas', trait: 'Friendly and kind', description: 'Amable, cordial y afable.' },
-  { name: 'Algenib', gender: 'Masculina', category: 'Masculinas', trait: 'Gravelly and textured', description: 'Grave, texturizada y profunda.' },
-  { name: 'Algieba', gender: 'Masculina', category: 'Masculinas', trait: 'Smooth and flowing', description: 'Fluida, melodiosa y constante.' },
-  { name: 'Alnilam', gender: 'Masculina', category: 'Masculinas', trait: 'Confident and firm', description: 'Segura, autoritaria y decidida.' },
-  { name: 'Charon', gender: 'Masculina', category: 'Masculinas', trait: 'Calm, professional, deep', description: 'Profunda, reflexiva y formal.' },
-  { name: 'Enceladus', gender: 'Masculina', category: 'Masculinas', trait: 'Soft and breathy', description: 'Suave, aireada y contemplativa.' },
-  { name: 'Fenrir', gender: 'Masculina', category: 'Masculinas', trait: 'Passionate and energetic', description: 'Enérgica, apasionada y vibrante.' },
-  { name: 'Iapetus', gender: 'Masculina', category: 'Masculinas', trait: 'Clear and clean', description: 'Nítida, neutral y transparente.' },
-  { name: 'Orus', gender: 'Masculina', category: 'Masculinas', trait: 'Calm and firm', description: 'Serena, equilibrada y sobria.' },
-  { name: 'Puck', gender: 'Masculina', category: 'Masculinas', trait: 'Upbeat and lively', description: 'Alegre, chispeante y jovial.' },
-  { name: 'Rasalgethi', gender: 'Masculina', category: 'Masculinas', trait: 'Professional narrator', description: 'Estilo narrador, documental y refinado.' },
-  { name: 'Sadachbia', gender: 'Masculina', category: 'Masculinas', trait: 'Lively and vivid', description: 'Vivaz, despierta y expresiva.' },
-  { name: 'Sadaltager', gender: 'Masculina', category: 'Masculinas', trait: 'Knowledgeable and learned', description: 'Erudita, reflexiva y persuasiva.' },
-  { name: 'Schedar', gender: 'Masculina', category: 'Masculinas', trait: 'Even and steady', description: 'Constante, sobria y paciente.' },
-  { name: 'Umbriel', gender: 'Masculina', category: 'Masculinas', trait: 'Relaxed and easy-going', description: 'Despreocupada, tranquila y casual.' },
-  { name: 'Zubenelgenubi', gender: 'Masculina', category: 'Masculinas', trait: 'Casual and relaxed', description: 'Casual, amena y distendida.' }
+  { name: 'Zephyr', gender: 'Femenina', category: 'Femeninas', trait: 'Bright and clear', description: 'Luminosa, articulada y directa.' }
 ];
 
 // ── Models Roster ────────────────────────────────────────────────────────────

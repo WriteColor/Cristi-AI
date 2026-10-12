@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 
 namespace CristiInput
@@ -13,12 +15,56 @@ namespace CristiInput
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern int GetWindowTextLength(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsIconic(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsZoomed(IntPtr hWnd);
+
+        private const int SW_SHOWNORMAL = 1;
+        private const int SW_SHOWMINIMIZED = 2;
+        private const int SW_MAXIMIZE = 3;
+        private const int SW_MINIMIZE = 6;
+        private const int SW_RESTORE = 9;
+        private const uint WM_CLOSE = 0x0010;
+
         private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
         private const uint KEYEVENTF_KEYUP = 0x0002;
         private const uint KEYEVENTF_UNICODE = 0x0004;
 
         private const int INPUT_KEYBOARD = 1;
-        private const int INPUT_MOUSE = 0;
 
         [StructLayout(LayoutKind.Sequential)]
         struct INPUT
@@ -133,8 +179,8 @@ namespace CristiInput
         {
             if (args.Length == 0)
             {
-                Console.WriteLine("CristiInput - Native Windows Input Automation");
-                Console.WriteLine("Usage: CristiInput.exe key <combo> | text <string> | desktop");
+                Console.WriteLine("CristiInput - Native Windows Automation");
+                Console.WriteLine("Usage: CristiInput.exe key <combo> | text <string> | desktop | windows | focus <query> | window <action> <query>");
                 return 1;
             }
 
@@ -159,7 +205,232 @@ namespace CristiInput
                 return 0;
             }
 
+            if (command == "windows")
+            {
+                ListWindows();
+                return 0;
+            }
+
+            if (command == "focus" && args.Length > 1)
+            {
+                string query = string.Join(" ", args, 1, args.Length - 1);
+                return FocusWindow(query);
+            }
+
+            if (command == "window" && args.Length > 2)
+            {
+                string action = args[1];
+                string query = string.Join(" ", args, 2, args.Length - 2);
+                return ManageWindow(action, query);
+            }
+
             return 1;
+        }
+
+        private static string EscapeJson(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            StringBuilder sb = new StringBuilder();
+            foreach (char c in s)
+            {
+                switch (c)
+                {
+                    case '\\': sb.Append("\\\\"); break;
+                    case '"': sb.Append("\\\""); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    case '\b': sb.Append("\\b"); break;
+                    case '\f': sb.Append("\\f"); break;
+                    default:
+                        if (c < 32) sb.AppendFormat("\\u{0:x4}", (int)c);
+                        else sb.Append(c);
+                        break;
+                }
+            }
+            return sb.ToString();
+        }
+
+        private static void ListWindows()
+        {
+            List<string> jsonItems = new List<string>();
+            EnumWindows((hWnd, lParam) =>
+            {
+                if (!IsWindowVisible(hWnd)) return true;
+                int length = GetWindowTextLength(hWnd);
+                if (length == 0) return true;
+
+                StringBuilder sb = new StringBuilder(length + 1);
+                GetWindowText(hWnd, sb, sb.Capacity);
+                string title = sb.ToString().Trim();
+                if (string.IsNullOrEmpty(title)) return true;
+
+                uint pid = 0;
+                GetWindowThreadProcessId(hWnd, out pid);
+                string processName = "";
+                try
+                {
+                    if (pid != 0)
+                    {
+                        using (Process proc = Process.GetProcessById((int)pid))
+                        {
+                            processName = proc.ProcessName;
+                        }
+                    }
+                }
+                catch { }
+
+                bool minimized = IsIconic(hWnd);
+                bool maximized = IsZoomed(hWnd);
+
+                jsonItems.Add(string.Format("{{\"hwnd\":{0},\"pid\":{1},\"title\":\"{2}\",\"process\":\"{3}\",\"isMinimized\":{4},\"isMaximized\":{5}}}",
+                    hWnd.ToInt64(), pid, EscapeJson(title), EscapeJson(processName),
+                    minimized ? "true" : "false", maximized ? "true" : "false"));
+
+                return true;
+            }, IntPtr.Zero);
+
+            Console.WriteLine("[" + string.Join(",", jsonItems.ToArray()) + "]");
+        }
+
+        private static IntPtr FindWindowByQuery(string query)
+        {
+            if (string.IsNullOrEmpty(query)) return IntPtr.Zero;
+            string clean = query.Trim();
+
+            long parsedHwnd;
+            if (long.TryParse(clean, out parsedHwnd))
+            {
+                IntPtr ptr = new IntPtr(parsedHwnd);
+                if (IsWindowVisible(ptr)) return ptr;
+            }
+
+            IntPtr exactMatch = IntPtr.Zero;
+            IntPtr startsMatch = IntPtr.Zero;
+            IntPtr containsMatch = IntPtr.Zero;
+            IntPtr procMatch = IntPtr.Zero;
+
+            EnumWindows((hWnd, lParam) =>
+            {
+                if (!IsWindowVisible(hWnd)) return true;
+                int length = GetWindowTextLength(hWnd);
+                if (length == 0) return true;
+
+                StringBuilder sb = new StringBuilder(length + 1);
+                GetWindowText(hWnd, sb, sb.Capacity);
+                string title = sb.ToString().Trim();
+                if (string.IsNullOrEmpty(title)) return true;
+
+                uint pid = 0;
+                GetWindowThreadProcessId(hWnd, out pid);
+                string processName = "";
+                try
+                {
+                    if (pid != 0)
+                    {
+                        using (Process proc = Process.GetProcessById((int)pid))
+                        {
+                            processName = proc.ProcessName;
+                        }
+                    }
+                }
+                catch { }
+
+                if (string.Equals(title, clean, StringComparison.OrdinalIgnoreCase))
+                {
+                    exactMatch = hWnd;
+                    return false; // Stop search
+                }
+
+                if (startsMatch == IntPtr.Zero && title.StartsWith(clean, StringComparison.OrdinalIgnoreCase))
+                {
+                    startsMatch = hWnd;
+                }
+
+                if (containsMatch == IntPtr.Zero && title.IndexOf(clean, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    containsMatch = hWnd;
+                }
+
+                if (procMatch == IntPtr.Zero && !string.IsNullOrEmpty(processName) &&
+                    (processName.IndexOf(clean, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     clean.IndexOf(processName, StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    procMatch = hWnd;
+                }
+
+                return true;
+            }, IntPtr.Zero);
+
+            if (exactMatch != IntPtr.Zero) return exactMatch;
+            if (startsMatch != IntPtr.Zero) return startsMatch;
+            if (containsMatch != IntPtr.Zero) return containsMatch;
+            return procMatch;
+        }
+
+        private static int FocusWindow(string query)
+        {
+            IntPtr targetHwnd = FindWindowByQuery(query);
+            if (targetHwnd == IntPtr.Zero)
+            {
+                Console.WriteLine("{\"success\":false,\"error\":\"No window found matching query\"}");
+                return 1;
+            }
+
+            if (IsIconic(targetHwnd))
+            {
+                ShowWindow(targetHwnd, SW_RESTORE);
+            }
+            else
+            {
+                ShowWindow(targetHwnd, SW_SHOWNORMAL);
+            }
+
+            bool focused = SetForegroundWindow(targetHwnd);
+            StringBuilder sb = new StringBuilder(256);
+            GetWindowText(targetHwnd, sb, 256);
+            string title = sb.ToString();
+
+            Console.WriteLine(string.Format("{{\"success\":{0},\"hwnd\":{1},\"title\":\"{2}\"}}",
+                focused ? "true" : "false", targetHwnd.ToInt64(), EscapeJson(title)));
+            return focused ? 0 : 1;
+        }
+
+        private static int ManageWindow(string action, string query)
+        {
+            IntPtr targetHwnd = FindWindowByQuery(query);
+            if (targetHwnd == IntPtr.Zero)
+            {
+                Console.WriteLine("{\"success\":false,\"error\":\"No window found matching query\"}");
+                return 1;
+            }
+
+            string act = action.ToLowerInvariant();
+            if (act == "minimize")
+            {
+                ShowWindow(targetHwnd, SW_MINIMIZE);
+            }
+            else if (act == "maximize")
+            {
+                ShowWindow(targetHwnd, SW_MAXIMIZE);
+            }
+            else if (act == "restore")
+            {
+                ShowWindow(targetHwnd, SW_RESTORE);
+            }
+            else if (act == "close")
+            {
+                PostMessage(targetHwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+            }
+            else
+            {
+                Console.WriteLine(string.Format("{{\"success\":false,\"error\":\"Accion desconocida: {0}\"}}", EscapeJson(act)));
+                return 1;
+            }
+
+            Console.WriteLine(string.Format("{{\"success\":true,\"action\":\"{0}\",\"hwnd\":{1}}}",
+                EscapeJson(act), targetHwnd.ToInt64()));
+            return 0;
         }
 
         private static void ToggleDesktop()
@@ -196,7 +467,6 @@ namespace CristiInput
                 byte modVk;
                 if (IsModifier(token, out modVk))
                 {
-                    // If it's the last token and we have no other keys, it's just pressing that modifier (e.g. Win key alone)
                     if (i == rawTokens.Length - 1 && modifiers.Count == 0 && baseKey == 0)
                     {
                         baseKey = modVk;

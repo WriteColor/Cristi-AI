@@ -32,6 +32,14 @@ export const IPC_CHANNELS = {
   COMPUTER_INPUT: 'computer-input',
   SYSTEM_EXECUTE_COMMAND: 'system-execute-command',
   SYSTEM_GET_FOLDERS: 'system-get-folders',
+  DELETE_FILE: 'delete-file',
+  MOVE_FILE: 'move-file',
+  SEARCH_DIRECTORY: 'search-directory',
+  LIST_WINDOWS: 'list-windows',
+  FOCUS_OS_WINDOW: 'focus-os-window',
+  MANAGE_OS_WINDOW: 'manage-os-window',
+  LIST_INSTALLED_APPS: 'list-installed-apps',
+  LAUNCH_APP: 'launch-app',
 
   // Config & Secrets
   GET_APP_CONFIG: 'get-app-config',

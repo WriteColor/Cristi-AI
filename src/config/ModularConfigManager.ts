@@ -106,11 +106,16 @@ const DEFAULT_CONFIG: ModularConfig = {
   ],
   voices: [
     { name: 'Aoede', gender: 'Femenina', trait: 'Elegante y cautivadora', description: 'Voz femenina principal de Cristi. Sofisticada, cálida, dulce y con dicción envolvente.', isRecommended: true },
+    { name: 'Despina', gender: 'Femenina', trait: 'Cálida, Acogedora & Seductora', description: 'Voz femenina cálida y que invita, de tono medio claro.', isRecommended: true },
+    { name: 'Sulafat', gender: 'Femenina', trait: 'Segura, Persuasiva & Cautivadora', description: 'Voz femenina cálida y segura, de tono medio claro.', isRecommended: true },
+    { name: 'Vindemiatrix', gender: 'Femenina', trait: 'Serena, Misteriosa & Envolvente', description: 'Voz femenina serena y reflexiva, de tono medio-bajo.', isRecommended: true },
+    { name: 'Callirrhoe', gender: 'Femenina', trait: 'Directa, Enérgica & Profesional', description: 'Voz femenina segura y clara, de tono medio.', isRecommended: false },
+    { name: 'Erinome', gender: 'Femenina', trait: 'Sofisticada, Calmada & Articulada', description: 'Voz femenina profesional y bien articulada.', isRecommended: false },
     { name: 'Kore', gender: 'Femenina', trait: 'Calmada y empática', description: 'Voz femenina serena, reconfortante y dulce.', isRecommended: false },
+    { name: 'Laomedeia', gender: 'Femenina', trait: 'Inteligente, Curiosa & Conversacional', description: 'Voz femenina clara y conversada, de tono medio.', isRecommended: false },
     { name: 'Leda', gender: 'Femenina', trait: 'Juvenil y animada', description: 'Tono juvenil, despierto y enérgico.', isRecommended: false },
-    { name: 'Calliope', gender: 'Femenina', trait: 'Expresiva y teatral', description: 'Rica en modulaciones emocionales con ritmo fluido.', isRecommended: false },
-    { name: 'Zephyr', gender: 'Femenina', trait: 'Suave y relajante', description: 'Voz susurrada y aterciopelada, ideal para sesiones nocturnas.', isRecommended: false },
-    { name: 'Thallo', gender: 'Femenina', trait: 'Brillante y optimista', description: 'Entonación alegre, clara y vivaz.', isRecommended: false }
+    { name: 'Pulcherrima', gender: 'Femenina', trait: 'Ultra Animada, Alegre & Radiante', description: 'Voz femenina brillante y enérgica.', isRecommended: false },
+    { name: 'Zephyr', gender: 'Femenina', trait: 'Suave y relajante', description: 'Voz susurrada y aterciopelada, ideal para sesiones nocturnas.', isRecommended: false }
   ],
   avatars: [
     { id: 'yanderegirl', name: 'Cristi Gótica (Yandere Girl)', path: '/models/live2d/yanderegirl/yanderegirl.model3.json', scale: 0.28, anchorY: 0.5, defaultEmotion: 'idle' },

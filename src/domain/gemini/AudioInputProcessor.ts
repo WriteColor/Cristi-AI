@@ -21,6 +21,10 @@ export class AudioInputProcessor implements AudioCapturePort {
   private processed = 0;
   private streamEpoch = 0;
   private dspConfig: { highPassEnabled: boolean; highPassHz: number };
+  private hasSpoken = false;
+  private silenceStart = 0;
+  private readonly SILENCE_THRESHOLD_MS = 600;
+  private readonly SPEECH_VOLUME_THRESHOLD = 0.015;
 
   constructor(private readonly options: AudioInputProcessorOptions = {}) {
     this.dspConfig = {
@@ -72,8 +76,27 @@ export class AudioInputProcessor implements AudioCapturePort {
       this.node.port.onmessage = (event: MessageEvent<{ pcm: ArrayBuffer; volume: number; epoch: number }>) => {
         if (!this.isRecording || this.isMuted || epoch !== this.generation || event.data.epoch !== this.streamEpoch) return;
         this.processed++;
+        const volume = event.data.volume;
         const now = performance.now();
-        if (now - this.lastVolume >= 50) { this.options.onVolumeChange?.(Math.min(1, event.data.volume * 4.5)); this.lastVolume = now; }
+        if (now - this.lastVolume >= 50) {
+          this.options.onVolumeChange?.(Math.min(1, volume * 4.5));
+          this.lastVolume = now;
+        }
+
+        // Hybrid VAD utterance detection
+        if (volume >= this.SPEECH_VOLUME_THRESHOLD) {
+          this.hasSpoken = true;
+          this.silenceStart = 0;
+        } else if (this.hasSpoken) {
+          if (this.silenceStart === 0) {
+            this.silenceStart = now;
+          } else if (now - this.silenceStart >= this.SILENCE_THRESHOLD_MS) {
+            this.options.onStreamEnd?.();
+            this.hasSpoken = false;
+            this.silenceStart = 0;
+          }
+        }
+
         this.options.onAudioData?.(event.data.pcm);
       };
       this.source = context.createMediaStreamSource(stream);
@@ -87,8 +110,20 @@ export class AudioInputProcessor implements AudioCapturePort {
       throw error;
     }
   }
-  mute(): void { if (!this.isMuted) this.options.onStreamEnd?.(); this.isMuted = true; this.node?.port.postMessage({ muted: true, epoch: ++this.streamEpoch }); this.options.onVolumeChange?.(0); }
-  unmute(): void { this.node?.port.postMessage({ muted: false, epoch: ++this.streamEpoch }); this.isMuted = false; }
+  mute(): void {
+    if (!this.isMuted) this.options.onStreamEnd?.();
+    this.isMuted = true;
+    this.hasSpoken = false;
+    this.silenceStart = 0;
+    this.node?.port.postMessage({ muted: true, epoch: ++this.streamEpoch });
+    this.options.onVolumeChange?.(0);
+  }
+  unmute(): void {
+    this.node?.port.postMessage({ muted: false, epoch: ++this.streamEpoch });
+    this.isMuted = false;
+    this.hasSpoken = false;
+    this.silenceStart = 0;
+  }
   toggleMute(): boolean { if (this.isMuted) this.unmute(); else this.mute(); return this.isMuted; }
   async resumeContext(): Promise<void> { if (this.audioContext?.state === 'suspended') await this.audioContext.resume(); }
   async stop(): Promise<void> {
@@ -96,6 +131,8 @@ export class AudioInputProcessor implements AudioCapturePort {
     this.pending = null;
     if (this.isRecording && !this.isMuted) this.options.onStreamEnd?.();
     this.isRecording = false;
+    this.hasSpoken = false;
+    this.silenceStart = 0;
     if (this.node) { this.node.port.onmessage = null; this.node.port.close(); this.node.disconnect(); this.node = null; }
     this.source?.disconnect(); this.source = null; this.muteNode?.disconnect(); this.muteNode = null;
     this.mediaStream?.getTracks().forEach(track => track.stop()); this.mediaStream = null;

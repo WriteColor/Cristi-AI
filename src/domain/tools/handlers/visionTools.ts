@@ -19,43 +19,73 @@ export const captureScreenSnapshotHandler: IToolHandler = {
   name: 'capture_screen_snapshot',
   declaration: {
     name: 'capture_screen_snapshot',
-    description: 'Captura un fotograma de la pantalla del usuario en este momento y te lo envía para que puedas ver qué está haciendo o qué hay en la pantalla. Puedes especificar qué región ver.',
+    description: 'Captura un fotograma de la pantalla del usuario o de una ventana específica en este momento y te lo envía para que puedas ver qué está haciendo. Puedes especificar región (semántica o coordenadas porcentuales) o el nombre de una ventana.',
     parameters: {
       type: 'OBJECT',
       properties: {
         region: {
           type: 'STRING',
-          enum: ['full', 'active_region', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'],
-          description: 'Qué parte de la pantalla capturar. "full" para toda la pantalla, "active_region" para el área de visión configurada.'
-        }
+          enum: ['full', 'active_region', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'center', 'left', 'right'],
+          description: 'Qué parte de la pantalla capturar. "full" por defecto.'
+        },
+        target_window: {
+          type: 'STRING',
+          description: 'Nombre de una aplicación o ventana específica a capturar directamente (ej: "Brave", "Excel", "Visual Studio Code").'
+        },
+        x_pct: { type: 'NUMBER', description: 'Coordenada X izquierda (0-100).' },
+        y_pct: { type: 'NUMBER', description: 'Coordenada Y superior (0-100).' },
+        w_pct: { type: 'NUMBER', description: 'Ancho porcentual (1-100).' },
+        h_pct: { type: 'NUMBER', description: 'Alto porcentual (1-100).' }
       }
     }
   },
-  async execute(args: { region?: string }, context?: ToolExecutionContext) {
+  async execute(
+    args: {
+      region?: string;
+      target_window?: string;
+      x_pct?: number;
+      y_pct?: number;
+      w_pct?: number;
+      h_pct?: number;
+    },
+    context?: ToolExecutionContext
+  ) {
     if (context?.signal?.aborted) return { status: 'cancelled', message: 'Captura de pantalla cancelada por señal de aborto.', cancelled: true };
     const region = typeof args?.region === 'string' ? args.region : 'full';
+    const targetWindow = typeof args?.target_window === 'string' && args.target_window.trim() ? args.target_window.trim() : null;
     let frameData: string | null = null;
 
-    // The native IPC accepts a percentage region object or null, never the
-    // semantic labels exposed to Gemini's tool schema. Prefer the active
-    // capture service for its configured crop, then translate the remaining
-    // labels into the native contract.
-    if (region === 'active_region' && context?.getScreenCapture) {
+    if (electronBridge?.isElectron && electronBridge.captureScreenNative) {
+      if (targetWindow) {
+        frameData = await electronBridge.captureScreenNative({ targetWindow, fresh: true });
+      } else if (args?.w_pct !== undefined && args?.h_pct !== undefined) {
+        const customRegion = {
+          x_pct: Math.max(0, Math.min(100, Number(args.x_pct || 0))),
+          y_pct: Math.max(0, Math.min(100, Number(args.y_pct || 0))),
+          w_pct: Math.max(1, Math.min(100, Number(args.w_pct))),
+          h_pct: Math.max(1, Math.min(100, Number(args.h_pct))),
+        };
+        frameData = await electronBridge.captureScreenNative({ region: customRegion, fresh: true });
+      } else {
+        const semanticMap: Record<string, { x_pct: number; y_pct: number; w_pct: number; h_pct: number } | null> = {
+          'top-left': { x_pct: 0, y_pct: 0, w_pct: 50, h_pct: 50 },
+          'top-right': { x_pct: 50, y_pct: 0, w_pct: 50, h_pct: 50 },
+          'bottom-left': { x_pct: 0, y_pct: 50, w_pct: 50, h_pct: 50 },
+          'bottom-right': { x_pct: 50, y_pct: 50, w_pct: 50, h_pct: 50 },
+          center: { x_pct: 25, y_pct: 25, w_pct: 50, h_pct: 50 },
+          left: { x_pct: 0, y_pct: 0, w_pct: 50, h_pct: 100 },
+          right: { x_pct: 50, y_pct: 0, w_pct: 50, h_pct: 100 },
+          full: null,
+          active_region: null
+        };
+        const nativeRegion = semanticMap[region] ?? null;
+        frameData = await electronBridge.captureScreenNative({ region: nativeRegion, fresh: true });
+      }
+    }
+
+    if (region === 'active_region' && !frameData && context?.getScreenCapture) {
       frameData = await context.getScreenCapture('active_region', { fresh: true });
     }
-
-    if (!frameData && electronBridge?.isElectron) {
-      const nativeRegion = {
-        'top-left': { x_pct: 0, y_pct: 0, w_pct: 50, h_pct: 50 },
-        'top-right': { x_pct: 50, y_pct: 0, w_pct: 50, h_pct: 50 },
-        'bottom-left': { x_pct: 0, y_pct: 50, w_pct: 50, h_pct: 50 },
-        'bottom-right': { x_pct: 50, y_pct: 50, w_pct: 50, h_pct: 50 },
-        center: { x_pct: 25, y_pct: 25, w_pct: 50, h_pct: 50 },
-      }[region];
-      frameData = await electronBridge.captureScreenNative(nativeRegion || null, true);
-    }
-
-    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Captura de pantalla cancelada tras extracción.', cancelled: true };
 
     if (!frameData && context?.getScreenCapture) {
       frameData = await context.getScreenCapture(region === 'full' ? 'full' : 'active_region', { fresh: true });
@@ -63,7 +93,7 @@ export const captureScreenSnapshotHandler: IToolHandler = {
       frameData = await context.takeScreenshot(region === 'full' ? 'full' : 'active_region');
     }
 
-    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Captura de pantalla cancelada tras procesamiento.', cancelled: true };
+    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Captura cancelada tras procesamiento.', cancelled: true };
 
     if (!frameData) {
       return {
@@ -74,9 +104,45 @@ export const captureScreenSnapshotHandler: IToolHandler = {
 
     return {
       status: 'captured',
-      region,
+      region: targetWindow ? `window:${targetWindow}` : region,
       captured_at_ms: Date.now(),
-      message: 'Este es el fotograma solicitado para la petición actual del usuario. Analízalo para responder; no uses una captura anterior.',
+      message: 'Este es el fotograma solicitado para la petición actual del usuario. Analízalo para responder.',
+      frame_data: frameData
+    };
+  }
+};
+
+export const captureWindowHandler: IToolHandler = {
+  name: 'capture_window',
+  declaration: {
+    name: 'capture_window',
+    description: 'Captura específicamente la ventana de una aplicación en ejecución por su nombre o título (ej: "Brave", "Visual Studio Code", "Excel", "Spotify") y analiza su contenido visual.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        window_query: {
+          type: 'STRING',
+          description: 'Nombre de la aplicación o parte del título de la ventana a capturar.'
+        }
+      },
+      required: ['window_query']
+    }
+  },
+  async execute(args: { window_query?: string }, context?: ToolExecutionContext) {
+    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Captura cancelada.', cancelled: true };
+    if (!args?.window_query) return { status: 'error', message: 'Parámetro window_query requerido.' };
+    let frameData: string | null = null;
+    if (electronBridge?.isElectron && electronBridge.captureScreenNative) {
+      frameData = await electronBridge.captureScreenNative({ targetWindow: args.window_query, fresh: true });
+    }
+    if (!frameData) {
+      return { status: 'unavailable', message: `No se pudo capturar la ventana "${args.window_query}". Asegúrate de que esté abierta.` };
+    }
+    return {
+      status: 'captured',
+      target_window: args.window_query,
+      captured_at_ms: Date.now(),
+      message: `Fotograma de la ventana "${args.window_query}" capturado exitosamente. Analízalo para responder.`,
       frame_data: frameData
     };
   }
@@ -240,6 +306,7 @@ export const clearScreenRegionHandler: IToolHandler = {
 
 export const visionTools: IToolHandler[] = [
   captureScreenSnapshotHandler,
+  captureWindowHandler,
   setScreenWatchHandler,
   setScreenRegionHandler,
   clearScreenRegionHandler,

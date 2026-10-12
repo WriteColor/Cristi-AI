@@ -561,6 +561,301 @@ export const openSystemAppOrLinkHandler: IToolHandler = {
   }
 };
 
+export const deleteFileHandler: IToolHandler = {
+  name: 'delete_file',
+  declaration: {
+    name: 'delete_file',
+    description: 'Elimina de forma segura un archivo o carpeta del sistema (protegiendo estrictamente archivos críticos del sistema operativo).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        path: {
+          type: 'STRING',
+          description: 'Ruta absoluta o relativa del archivo o carpeta a eliminar.'
+        },
+        recursive: {
+          type: 'BOOLEAN',
+          description: 'Si es true, elimina recursivamente carpetas y sus contenidos.'
+        }
+      },
+      required: ['path']
+    }
+  },
+  async execute(args: { path?: string; recursive?: boolean }, context?: ToolExecutionContext) {
+    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Eliminación cancelada.', cancelled: true };
+    if (!args?.path || typeof args.path !== 'string') return { status: 'error', message: 'Ruta requerida.' };
+    const bridge = (await getElectronBridge()) || bridgeProxy;
+    if (bridge?.deleteFile) {
+      try {
+        const res = await bridge.deleteFile(args.path, Boolean(args.recursive));
+        if (res.success) {
+          return { status: 'success', path: args.path, message: `"${args.path}" eliminado correctamente.` };
+        }
+        return { status: 'error', path: args.path, message: res.error || 'No se pudo eliminar el archivo.' };
+      } catch (e: any) {
+        return { status: 'error', path: args.path, message: e?.message };
+      }
+    }
+    return { status: 'error', message: 'No disponible fuera del entorno de escritorio.' };
+  }
+};
+
+export const moveFileHandler: IToolHandler = {
+  name: 'move_file',
+  declaration: {
+    name: 'move_file',
+    description: 'Mueve o renombra un archivo o carpeta en el sistema de archivos.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        source_path: {
+          type: 'STRING',
+          description: 'Ruta actual del archivo o carpeta.'
+        },
+        destination_path: {
+          type: 'STRING',
+          description: 'Nueva ruta de destino.'
+        }
+      },
+      required: ['source_path', 'destination_path']
+    }
+  },
+  async execute(args: { source_path?: string; destination_path?: string }, context?: ToolExecutionContext) {
+    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Movimiento cancelado.', cancelled: true };
+    if (!args?.source_path || !args?.destination_path) {
+      return { status: 'error', message: 'Se requieren origen y destino.' };
+    }
+    const bridge = (await getElectronBridge()) || bridgeProxy;
+    if (bridge?.moveFile) {
+      try {
+        const res = await bridge.moveFile(args.source_path, args.destination_path);
+        if (res.success) {
+          return { status: 'success', source: args.source_path, destination: args.destination_path, message: 'Elemento movido exitosamente.' };
+        }
+        return { status: 'error', message: res.error || 'No se pudo mover el elemento.' };
+      } catch (e: any) {
+        return { status: 'error', message: e?.message };
+      }
+    }
+    return { status: 'error', message: 'No disponible fuera del entorno de escritorio.' };
+  }
+};
+
+export const searchDirectoryHandler: IToolHandler = {
+  name: 'search_directory',
+  declaration: {
+    name: 'search_directory',
+    description: 'Busca recursivamente archivos o carpetas por nombre o coincidencia de texto dentro de una ruta.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        path: {
+          type: 'STRING',
+          description: 'Directorio inicial de búsqueda (por defecto workspace o raíz).'
+        },
+        query: {
+          type: 'STRING',
+          description: 'Término de búsqueda o extensión (ej: ".pdf", "reporte", "index.ts").'
+        },
+        max_results: {
+          type: 'INTEGER',
+          description: 'Número máximo de resultados (por defecto 50).'
+        }
+      }
+    }
+  },
+  async execute(args: { path?: string; query?: string; max_results?: number }, context?: ToolExecutionContext) {
+    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Búsqueda cancelada.', cancelled: true };
+    const bridge = (await getElectronBridge()) || bridgeProxy;
+    if (bridge?.searchDirectory) {
+      try {
+        const dir = args?.path || '';
+        const results = await bridge.searchDirectory(dir, args?.query, args?.max_results || 50);
+        return {
+          status: 'success',
+          count: results.length,
+          query: args?.query,
+          results
+        };
+      } catch (e: any) {
+        return { status: 'error', message: e?.message };
+      }
+    }
+    return { status: 'error', message: 'No disponible fuera del entorno de escritorio.' };
+  }
+};
+
+export const listOpenWindowsHandler: IToolHandler = {
+  name: 'list_open_windows',
+  declaration: {
+    name: 'list_open_windows',
+    description: 'Lista todas las ventanas de aplicaciones abiertas visibles en el escritorio de Windows con sus títulos, procesos y estados.'
+  },
+  async execute(_args?: unknown, context?: ToolExecutionContext) {
+    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Consulta cancelada.', cancelled: true };
+    const bridge = (await getElectronBridge()) || bridgeProxy;
+    if (bridge?.listWindows) {
+      try {
+        const windows = await bridge.listWindows();
+        return {
+          status: 'success',
+          count: windows.length,
+          windows
+        };
+      } catch (e: any) {
+        return { status: 'error', message: e?.message };
+      }
+    }
+    return { status: 'error', message: 'No disponible fuera de Electron.' };
+  }
+};
+
+export const focusWindowHandler: IToolHandler = {
+  name: 'focus_window',
+  declaration: {
+    name: 'focus_window',
+    description: 'Trae al frente y enfoca una ventana de aplicación abierta en Windows por título, nombre de proceso o HWND.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: {
+          type: 'STRING',
+          description: 'Nombre de la aplicación, parte del título de la ventana o ID de HWND (ej: "Brave", "Visual Studio Code", "Spotify").'
+        }
+      },
+      required: ['query']
+    }
+  },
+  async execute(args: { query?: string | number }, context?: ToolExecutionContext) {
+    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Enfoque cancelado.', cancelled: true };
+    if (!args?.query) return { status: 'error', message: 'Parámetro query requerido.' };
+    const bridge = (await getElectronBridge()) || bridgeProxy;
+    if (bridge?.focusOsWindow) {
+      try {
+        const res = await bridge.focusOsWindow(args.query);
+        if (res.success) {
+          return { status: 'success', query: args.query, title: res.title, message: `Ventana "${res.title || args.query}" enfocada exitosamente.` };
+        }
+        return { status: 'error', query: args.query, message: res.error || 'No se encontró la ventana solicitada.' };
+      } catch (e: any) {
+        return { status: 'error', message: e?.message };
+      }
+    }
+    return { status: 'error', message: 'No disponible fuera de Electron.' };
+  }
+};
+
+export const manageWindowHandler: IToolHandler = {
+  name: 'manage_window',
+  declaration: {
+    name: 'manage_window',
+    description: 'Controla el estado de una ventana abierta en Windows: minimizar, maximizar, restaurar o cerrar.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: {
+          type: 'STRING',
+          description: 'Nombre o título de la aplicación a gestionar.'
+        },
+        action: {
+          type: 'STRING',
+          enum: ['minimize', 'maximize', 'restore', 'close'],
+          description: 'Acción a aplicar en la ventana.'
+        }
+      },
+      required: ['query', 'action']
+    }
+  },
+  async execute(args: { query?: string | number; action?: 'minimize' | 'maximize' | 'restore' | 'close' }, context?: ToolExecutionContext) {
+    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Gestión cancelada.', cancelled: true };
+    if (!args?.query || !args?.action) return { status: 'error', message: 'query y action son requeridos.' };
+    const bridge = (await getElectronBridge()) || bridgeProxy;
+    if (bridge?.manageOsWindow) {
+      try {
+        const res = await bridge.manageOsWindow(args.query, args.action);
+        return { status: res.success ? 'success' : 'error', ...res };
+      } catch (e: any) {
+        return { status: 'error', message: e?.message };
+      }
+    }
+    return { status: 'error', message: 'No disponible fuera de Electron.' };
+  }
+};
+
+export const listInstalledAppsHandler: IToolHandler = {
+  name: 'list_installed_apps',
+  declaration: {
+    name: 'list_installed_apps',
+    description: 'Lista las aplicaciones de Windows instaladas en el sistema del usuario (detectadas desde el Menú Inicio y Registro de Windows sin necesidad de puertos abiertos).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        filter: {
+          type: 'STRING',
+          description: 'Filtro opcional por nombre (ej: "browser", "code", "excel").'
+        }
+      }
+    }
+  },
+  async execute(args: { filter?: string }, context?: ToolExecutionContext) {
+    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Búsqueda cancelada.', cancelled: true };
+    const bridge = (await getElectronBridge()) || bridgeProxy;
+    if (bridge?.listInstalledApps) {
+      try {
+        const apps = await bridge.listInstalledApps(args?.filter);
+        return {
+          status: 'success',
+          count: apps.length,
+          apps
+        };
+      } catch (e: any) {
+        return { status: 'error', message: e?.message };
+      }
+    }
+    return { status: 'error', message: 'No disponible fuera de Electron.' };
+  }
+};
+
+export const launchAppHandler: IToolHandler = {
+  name: 'launch_app',
+  declaration: {
+    name: 'launch_app',
+    description: 'Inicia directamente una aplicación local instalada en Windows (ej: "Brave", "Word", "Excel", "Notepad", "Calculadora") sin puertos de red.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        app_name: {
+          type: 'STRING',
+          description: 'Nombre de la aplicación o ejecutable a iniciar.'
+        },
+        args: {
+          type: 'ARRAY',
+          items: { type: 'STRING' },
+          description: 'Argumentos opcionales de línea de comandos para la aplicación.'
+        }
+      },
+      required: ['app_name']
+    }
+  },
+  async execute(args: { app_name?: string; args?: string[] }, context?: ToolExecutionContext) {
+    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Lanzamiento cancelado.', cancelled: true };
+    if (!args?.app_name) return { status: 'error', message: 'Parámetro app_name requerido.' };
+    const bridge = (await getElectronBridge()) || bridgeProxy;
+    if (bridge?.launchApp) {
+      try {
+        const res = await bridge.launchApp(args.app_name, args.args || []);
+        if (res.success) {
+          return { status: 'success', appName: res.appName, message: `Aplicación "${res.appName}" iniciada con éxito.` };
+        }
+        return { status: 'error', appName: args.app_name, message: res.error || 'No se pudo iniciar la aplicación.' };
+      } catch (e: any) {
+        return { status: 'error', message: e?.message };
+      }
+    }
+    return { status: 'error', message: 'No disponible fuera de Electron.' };
+  }
+};
+
 export const systemTools: IToolHandler[] = [
   getCurrentTimeAndDateHandler,
   getWeatherHandler,
@@ -569,7 +864,15 @@ export const systemTools: IToolHandler[] = [
   executeTerminalCommandHandler,
   readFileHandler,
   writeFileHandler,
+  deleteFileHandler,
+  moveFileHandler,
   listDirectoryHandler,
+  searchDirectoryHandler,
+  listOpenWindowsHandler,
+  focusWindowHandler,
+  manageWindowHandler,
+  listInstalledAppsHandler,
+  launchAppHandler,
   getClipboardHandler,
   setClipboardHandler,
   getRunningProcessesHandler,

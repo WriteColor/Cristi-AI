@@ -1,5 +1,19 @@
 import { isNewerVersion, verifyInstaller } from '../security/UpdatePolicy';
-import { resolveFile, approveWorkspace, executeSystemCapability, executeTerminalCommand, getSystemFoldersPaths } from '../security/SystemCapabilityService';
+import {
+  resolveFile,
+  approveWorkspace,
+  executeSystemCapability,
+  executeTerminalCommand,
+  getSystemFoldersPaths,
+  deleteFileSafe,
+  moveFileSafe,
+  searchDirectorySafe,
+  listOpenWindows,
+  focusWindow as focusOsWindow,
+  manageWindow as manageOsWindow,
+  listInstalledApps,
+  launchApp
+} from '../security/SystemCapabilityService';
 import { readPublicConfig, writePublicConfig } from '../security/PublicConfig';
 import { handleTrusted, onTrusted } from '../security/CapabilityRouter';
 import { shell, clipboard, Notification, desktopCapturer, screen, dialog, app, BrowserWindow } from 'electron';
@@ -453,6 +467,38 @@ export function registerSystemIpc(rootDir?: string): void {
     }
   });
 
+  handleTrusted('delete-file', async (_event, filePath: import("../../../shared/ipc/contracts").FileRequest | string, recursive?: boolean) => {
+    return await deleteFileSafe(filePath, Boolean(recursive));
+  });
+
+  handleTrusted('move-file', async (_event, sourcePath: import("../../../shared/ipc/contracts").FileRequest | string, destPath: import("../../../shared/ipc/contracts").FileRequest | string) => {
+    return await moveFileSafe(sourcePath, destPath);
+  });
+
+  handleTrusted('search-directory', async (_event, dirPath?: import("../../../shared/ipc/contracts").FileRequest | string, query?: string, maxResults?: number) => {
+    return await searchDirectorySafe(dirPath || '', query, maxResults);
+  });
+
+  handleTrusted('list-windows', async () => {
+    return await listOpenWindows();
+  });
+
+  handleTrusted('focus-os-window', async (_event, query: string | number) => {
+    return await focusOsWindow(query);
+  });
+
+  handleTrusted('manage-os-window', async (_event, query: string | number, action: 'minimize' | 'maximize' | 'restore' | 'close') => {
+    return await manageOsWindow(query, action);
+  });
+
+  handleTrusted('list-installed-apps', async (_event, filter?: string) => {
+    return await listInstalledApps(filter);
+  });
+
+  handleTrusted('launch-app', async (_event, appName: string, args?: string[]) => {
+    return await launchApp(appName, args || []);
+  });
+
   handleTrusted('system-get-folders', () => {
     return getSystemFoldersPaths();
   });
@@ -546,15 +592,19 @@ export function registerSystemIpc(rootDir?: string): void {
   });
 
   // ── High-Performance Native Screen Capture ────────────────────────────────
-  handleTrusted('capture-screen-native', async (_event, request: ScreenRegion | { region?: ScreenRegion | null; fresh?: boolean } | null = null) => {
+  handleTrusted('capture-screen-native', async (_event, request: ScreenRegion | { region?: ScreenRegion | null; targetWindow?: string | null; fresh?: boolean } | null = null) => {
     const isFreshRequest = Boolean(request && typeof request === 'object' && 'fresh' in request && request.fresh);
-    const region: ScreenRegion | null = request && typeof request === 'object' && 'fresh' in request
+    const region: ScreenRegion | null = request && typeof request === 'object' && 'region' in request
       ? (request.region ?? null)
-      : request as ScreenRegion | null;
-    const regionKey =
-      region && typeof region === 'object'
-        ? `${Math.round(region.x_pct || 0)}_${Math.round(region.y_pct || 0)}_${Math.round(region.w_pct || 100)}_${Math.round(region.h_pct || 100)}`
-        : 'full';
+      : (request && typeof request === 'object' && !('targetWindow' in request || 'fresh' in request) ? request as ScreenRegion : null);
+    const targetWindowQuery = request && typeof request === 'object' && 'targetWindow' in request && typeof request.targetWindow === 'string'
+      ? request.targetWindow.trim().toLowerCase()
+      : null;
+    const regionKey = targetWindowQuery
+      ? `win_${targetWindowQuery}`
+      : (region && typeof region === 'object'
+          ? `${Math.round(region.x_pct || 0)}_${Math.round(region.y_pct || 0)}_${Math.round(region.w_pct || 100)}_${Math.round(region.h_pct || 100)}`
+          : 'full');
 
     const now = Date.now();
     // Return cached frame if within 700ms for identical region (zero GPU contention)
@@ -599,10 +649,11 @@ export function registerSystemIpc(rootDir?: string): void {
         const targetW = Math.max(1, Math.min(768, pixelWidth));
         const targetH = Math.max(1, Math.round((pixelHeight / Math.max(1, pixelWidth)) * targetW));
 
+        const capturerTypes: Array<'screen' | 'window'> = targetWindowQuery ? ['window', 'screen'] : ['screen'];
         let sources = [];
         try {
           sources = await desktopCapturer.getSources({
-            types: ['screen'],
+            types: capturerTypes,
             thumbnailSize: {
               width: targetW,
               height: targetH,
@@ -616,10 +667,16 @@ export function registerSystemIpc(rootDir?: string): void {
 
         if (!sources || sources.length === 0) return null;
 
-        const primarySource =
-          sources.find((s) => s.display_id === String(targetDisplay?.id)) ||
-          sources.find((s) => s.display_id === String(screen.getPrimaryDisplay()?.id)) ||
-          sources[0];
+        let primarySource = null;
+        if (targetWindowQuery) {
+          primarySource = sources.find((s) => s.name.toLowerCase().includes(targetWindowQuery));
+        }
+        if (!primarySource) {
+          primarySource =
+            sources.find((s) => s.display_id === String(targetDisplay?.id)) ||
+            sources.find((s) => s.display_id === String(screen.getPrimaryDisplay()?.id)) ||
+            sources[0];
+        }
 
         if (!primarySource || !primarySource.thumbnail || primarySource.thumbnail.isEmpty()) {
           return null;

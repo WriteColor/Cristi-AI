@@ -298,6 +298,74 @@ export class ElectronBridgeService {
     throw new Error('Electron filesystem unavailable in browser');
   }
 
+  public async deleteFile(filePath: FileRequest | string, recursive = false): Promise<{ success: boolean; error?: string }> {
+    const api = getApi();
+    if (api?.deleteFile) {
+      return await api.deleteFile(filePath, recursive);
+    }
+    throw new Error('Electron filesystem unavailable in browser');
+  }
+
+  public async moveFile(sourcePath: FileRequest | string, destPath: FileRequest | string): Promise<{ success: boolean; error?: string }> {
+    const api = getApi();
+    if (api?.moveFile) {
+      return await api.moveFile(sourcePath, destPath);
+    }
+    throw new Error('Electron filesystem unavailable in browser');
+  }
+
+  public async searchDirectory(
+    dirPath: FileRequest | string,
+    query?: string,
+    maxResults = 100
+  ): Promise<Array<{ path: string; name: string; type: 'FILE' | 'DIRECTORY'; size?: number }>> {
+    const api = getApi();
+    if (api?.searchDirectory) {
+      return await api.searchDirectory(dirPath, query, maxResults);
+    }
+    throw new Error('Electron filesystem unavailable in browser');
+  }
+
+  public async listWindows(): Promise<Array<{ hwnd: number; pid: number; title: string; process: string; isMinimized: boolean; isMaximized: boolean }>> {
+    const api = getApi();
+    if (api?.listWindows) {
+      return await api.listWindows();
+    }
+    return [];
+  }
+
+  public async focusOsWindow(query: string | number): Promise<{ success: boolean; title?: string; error?: string }> {
+    const api = getApi();
+    if (api?.focusOsWindow) {
+      return await api.focusOsWindow(query);
+    }
+    return { success: false, error: 'Electron unavailable' };
+  }
+
+  public async manageOsWindow(query: string | number, action: 'minimize' | 'maximize' | 'restore' | 'close'): Promise<{ success: boolean; action: string; error?: string }> {
+    const api = getApi();
+    if (api?.manageOsWindow) {
+      return await api.manageOsWindow(query, action);
+    }
+    return { success: false, action, error: 'Electron unavailable' };
+  }
+
+  public async listInstalledApps(filter?: string): Promise<Array<{ name: string; path: string; type: 'shortcut' | 'executable' }>> {
+    const api = getApi();
+    if (api?.listInstalledApps) {
+      return await api.listInstalledApps(filter);
+    }
+    return [];
+  }
+
+  public async launchApp(appName: string, args: string[] = []): Promise<{ success: boolean; appName: string; path?: string; error?: string }> {
+    const api = getApi();
+    if (api?.launchApp) {
+      return await api.launchApp(appName, args);
+    }
+    return { success: false, appName, error: 'Electron unavailable' };
+  }
+
   public async readDirectory(dirPath: FileRequest | string): Promise<{ entry: string; type: 'FILE' | 'DIRECTORY' }[]> {
     const api = getApi();
     if (api?.readDirectory) {

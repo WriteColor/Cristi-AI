@@ -415,6 +415,14 @@ export function useCompanionServices({ live2dRef }: UseCompanionServicesProps) {
           }
         },
         onTelemetry: metrics => useTelemetryStore.getState().setLiveMetrics(metrics),
+        onInteractionStatus: (status: 'IN_PROGRESS' | 'IDLE') => {
+          useSessionStore.getState().setInteractionStatus(status);
+          if (status === 'IN_PROGRESS') {
+            useCompanionStore.getState().setIsThinking(true);
+          } else if (status === 'IDLE') {
+            useCompanionStore.getState().setIsThinking(false);
+          }
+        },
         onInterrupted: () => {
           if (useCompanionStore.getState().isThinking) {
             useCompanionStore.getState().setIsThinking(false);

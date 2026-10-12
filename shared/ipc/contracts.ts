@@ -4,8 +4,8 @@ const text = z.string().max(65536).refine(value => !value.includes('\0'));
 const name = z.string().min(1).max(256);
 const number = z.number().finite();
 const json: z.ZodType<unknown> = z.lazy(() => z.union([z.null(), z.boolean(), number, text,
-  z.array(json).max(10000), z.record(json)]));
-const record = z.record(json);
+  z.array(json).max(10000), z.record(z.string(), json)]));
+const record = z.record(z.string(), json);
 export type PathScope = 'userData' | 'exports' | 'workspaceApproved' | 'desktop' | 'downloads' | 'documents' | 'pictures' | 'videos' | 'music' | 'custom';
 const pathScopeSchema = z.enum([
   'userData',
@@ -28,7 +28,7 @@ const secret = z.enum(['gemini.apiKey', 'spotify.clientSecret']);
 const noArgs = z.tuple([]);
 const screenRegionSchema = z.object({ x_pct: number.min(0).max(100).optional(), y_pct: number.min(0).max(100).optional(),
   w_pct: number.min(1).max(100).optional(), h_pct: number.min(1).max(100).optional() }).strict();
-const screenCaptureRequestSchema = z.object({ region: screenRegionSchema.nullish(), fresh: z.boolean().optional() }).strict();
+const screenCaptureRequestSchema = z.object({ region: screenRegionSchema.nullish(), targetWindow: z.string().nullish(), fresh: z.boolean().optional() }).strict();
 
 export const requestSchemas = {
   'set-ignore-mouse-events': z.tuple([z.boolean(), z.object({ forward: z.boolean().optional() }).strict().optional()]),
@@ -42,6 +42,14 @@ export const requestSchemas = {
   'open-telemetry-window': noArgs, 'close-telemetry-window': noArgs,
   'telemetry-report': z.tuple([record]), 'telemetry-snapshot': noArgs,
   'read-file': z.tuple([file]), 'write-file': z.tuple([file, text]), 'append-file': z.tuple([file, text]),
+  'delete-file': z.union([z.tuple([file]), z.tuple([file, z.boolean().optional()])]),
+  'move-file': z.tuple([file, file]),
+  'search-directory': z.union([noArgs, z.tuple([file]), z.tuple([file, text.optional()]), z.tuple([file, text.optional(), number.optional()])]),
+  'list-windows': noArgs,
+  'focus-os-window': z.tuple([z.union([text, number])]),
+  'manage-os-window': z.tuple([z.union([text, number]), z.enum(['minimize', 'maximize', 'restore', 'close'])]),
+  'list-installed-apps': z.union([noArgs, z.tuple([text.optional()])]),
+  'launch-app': z.union([z.tuple([text]), z.tuple([text, z.array(text).optional()])]),
   'read-directory': z.tuple([file]), 'open-path': z.tuple([file]), 'show-item-in-folder': z.tuple([file]),
   'approve-workspace': noArgs,
   'system-get-folders': noArgs,
@@ -65,8 +73,8 @@ export const requestSchemas = {
   'companion-pause': noArgs, 'companion-resume': noArgs,
   'check-for-updates': noArgs, 'download-update': noArgs, 'install-update': noArgs,
   'mcp-connect': z.tuple([z.object({ id: name, name: name.optional(), type: z.enum(['stdio', 'sse']).optional(),
-    command: text.optional(), args: z.array(text).max(100).optional(), env: z.record(text).optional(),
-    url: z.string().url().optional(), headers: z.record(text).optional() }).strict()]),
+    command: text.optional(), args: z.array(text).max(100).optional(), env: z.record(z.string(), text).optional(),
+    url: z.string().url().optional(), headers: z.record(z.string(), text).optional() }).strict()]),
   'mcp-call-tool': z.tuple([z.object({ serverId: name, name, arguments: record.optional(), timeoutMs: number.min(1000).max(60000).optional() }).strict()]),
   'mcp-disconnect': z.tuple([name]),
   'windows-media-control': z.tuple([text]),
@@ -196,6 +204,8 @@ export interface ProcessMemoryInfo {
 /** Región de pantalla para capture-screen-native (porcentajes 0-100) */
 export interface ScreenCaptureRequest {
   region?: ScreenRegion | null;
+  /** Focus and capture only the specified window title or process. */
+  targetWindow?: string | null;
   /** Bypass the short native cache for an explicit user/model snapshot. */
   fresh?: boolean;
 }
@@ -257,6 +267,14 @@ export interface IpcResponseMap {
   'read-file': string;
   'write-file': boolean;
   'append-file': boolean;
+  'delete-file': { success: boolean; error?: string };
+  'move-file': { success: boolean; error?: string };
+  'search-directory': Array<{ path: string; name: string; type: 'FILE' | 'DIRECTORY'; size?: number }>;
+  'list-windows': Array<{ hwnd: number; pid: number; title: string; process: string; isMinimized: boolean; isMaximized: boolean }>;
+  'focus-os-window': { success: boolean; title?: string; error?: string };
+  'manage-os-window': { success: boolean; action: string; error?: string };
+  'list-installed-apps': Array<{ name: string; path: string; type: 'shortcut' | 'executable' }>;
+  'launch-app': { success: boolean; appName: string; path?: string; error?: string };
   'read-directory': { entry: string; type: 'FILE' | 'DIRECTORY' }[];
   'open-path': { success: boolean; error: string | null };
   'show-item-in-folder': boolean;
@@ -387,6 +405,14 @@ export interface ElectronApiBridge {
   readFile: (filePath: FileRequest | string) => Promise<string>;
   writeFile: (filePath: FileRequest | string, data: string) => Promise<boolean>;
   appendFile: (filePath: FileRequest | string, data: string) => Promise<boolean>;
+  deleteFile?: (filePath: FileRequest | string, recursive?: boolean) => Promise<{ success: boolean; error?: string }>;
+  moveFile?: (sourcePath: FileRequest | string, destPath: FileRequest | string) => Promise<{ success: boolean; error?: string }>;
+  searchDirectory?: (dirPath: FileRequest | string, query?: string, maxResults?: number) => Promise<Array<{ path: string; name: string; type: 'FILE' | 'DIRECTORY'; size?: number }>>;
+  listWindows?: () => Promise<Array<{ hwnd: number; pid: number; title: string; process: string; isMinimized: boolean; isMaximized: boolean }>>;
+  focusOsWindow?: (query: string | number) => Promise<{ success: boolean; title?: string; error?: string }>;
+  manageOsWindow?: (query: string | number, action: 'minimize' | 'maximize' | 'restore' | 'close') => Promise<{ success: boolean; action: string; error?: string }>;
+  listInstalledApps?: (filter?: string) => Promise<Array<{ name: string; path: string; type: 'shortcut' | 'executable' }>>;
+  launchApp?: (appName: string, args?: string[]) => Promise<{ success: boolean; appName: string; path?: string; error?: string }>;
   readDirectory: (dirPath: FileRequest | string) => Promise<{ entry: string; type: 'FILE' | 'DIRECTORY' }[]>;
   getSystemFolders?: () => Promise<Record<string, string>>;
   openExternal: (url: string) => Promise<boolean>;

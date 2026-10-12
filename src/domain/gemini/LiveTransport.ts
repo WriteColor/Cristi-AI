@@ -432,6 +432,38 @@ export class GeminiLiveSocket implements LiveSessionPort {
   }
 
   /**
+   * Signal end of user speech for Hybrid VAD
+   */
+  sendAudioStreamEnd(): boolean {
+    if (!this.isConnected || !this.websocket || this.websocket.readyState !== WebSocket.OPEN) return false;
+    this.websocket.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
+    return true;
+  }
+
+  /**
+   * Send text user input via realtimeInput (Gemini 3.8 Live API standard)
+   */
+  sendRealtimeText(text: string): boolean {
+    if (!this.isConnected || !this.websocket || this.websocket.readyState !== WebSocket.OPEN || !text) return false;
+    this.websocket.send(JSON.stringify({ realtimeInput: { text } }));
+    return true;
+  }
+
+  /**
+   * Inject contextual conversation turns into the live session mid-stream
+   */
+  sendClientContent(turns: Array<{ role: 'user' | 'model'; parts: Array<{ text?: string }> }>, turnComplete = true): boolean {
+    if (!this.isConnected || !this.websocket || this.websocket.readyState !== WebSocket.OPEN) return false;
+    this.websocket.send(JSON.stringify({
+      clientContent: {
+        turns: turns.map(t => ({ role: t.role, parts: t.parts })),
+        turnComplete
+      }
+    }));
+    return true;
+  }
+
+  /**
    * Send real-time media chunk — dispatches per endpoint model contract (mediaChunks vs distinct video)
    */
   sendRealtimeMedia(data: string, mimeType = 'image/jpeg', priority = false) {
@@ -702,6 +734,12 @@ export class GeminiLiveSocket implements LiveSessionPort {
         }, Math.max(0, remainingMs - 1000));
         logger.warn('GEMINI', `GoAway recibido del servidor. Tiempo restante: ${message.goAway.timeLeft || 'desconocido'}.`);
       }
+
+      // 6. Interaction Status (Gemini 3.8 Live & Extended Thinking lifecycle)
+      const currentInteractionStatus = message.interactionStatus || message.interaction_status;
+      if (currentInteractionStatus) {
+        this.onInteractionStatus(currentInteractionStatus);
+      }
     } catch (err) {
       logger.error('GEMINI', 'Error al procesar mensaje del WebSocket de Gemini Live:', err);
     }
@@ -790,4 +828,7 @@ export class GeminiLiveSocket implements LiveSessionPort {
   }
 
   private publishTelemetry(): void {
-    const metrics = this.telemetry.getAgg
+    const metrics = this.telemetry.getAggregatedMetrics();
+    queueMicrotask(() => this.onTelemetry(metrics));
+  }
+}

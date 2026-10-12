@@ -10,6 +10,7 @@ export interface SessionState {
   connectionState: GeminiLiveConnectionState;
   isInterrupted: boolean;
   activeToolName: string | null;
+  interactionStatus: 'IN_PROGRESS' | 'IDLE' | null;
   recentLogs: SessionLog[];
 
   // --- Extended / Convenience State ---
@@ -21,6 +22,7 @@ export interface SessionState {
   setConnectionState: (connectionState: GeminiLiveConnectionState) => void;
   setInterrupted: (isInterrupted: boolean) => void;
   setActiveTool: (activeToolName: string | null) => void;
+  setInteractionStatus: (status: 'IN_PROGRESS' | 'IDLE' | null) => void;
   addLog: (tagOrLog: string | Omit<SessionLog, 'id' | 'timestamp'> | SessionLog, maybeMessage?: string) => void;
 
   // --- Extended Actions ---
@@ -36,6 +38,7 @@ export const useSessionStore = create<SessionState>()((set) => ({
   connectionState: 'DISCONNECTED',
   isInterrupted: false,
   activeToolName: null,
+  interactionStatus: null,
   recentLogs: [],
 
   // Extended initial state
@@ -48,6 +51,7 @@ export const useSessionStore = create<SessionState>()((set) => ({
 
   setInterrupted: (isInterrupted) => set({ isInterrupted }),
   setActiveTool: (activeToolName) => set({ activeToolName }),
+  setInteractionStatus: (interactionStatus) => set({ interactionStatus }),
 
   addLog: (tagOrLog, maybeMessage) =>
     set((state) => {
