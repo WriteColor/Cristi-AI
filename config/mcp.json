@@ -1,0 +1,24 @@
+{
+  "servers": [
+    {
+      "id": "cristi_spotify",
+      "name": "Spotify Cristi MCP",
+      "type": "internal",
+      "env": {},
+      "enabled": true,
+      "status": "disconnected",
+      "tools": [],
+      "description": "Servidor MCP oficial de Cristi AI para control de Spotify y sincronización de emociones Live2D"
+    },
+    {
+      "id": "cristi_playwright",
+      "name": "Playwright Brave MCP",
+      "type": "internal",
+      "env": {},
+      "enabled": true,
+      "status": "disconnected",
+      "tools": [],
+      "description": "Servidor MCP oficial de Cristi AI para automatización web con Brave Browser y reproducción garantizada de YouTube"
+    }
+  ]
+}

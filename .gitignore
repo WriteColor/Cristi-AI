@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Production Builds & Packaging
+dist/
+dist-ssr/
+release/
+build/
+*.local
+
+# Logs & Diagnostics
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+neutralinojs.log
+*.log
+
+# Environment Variables & Secrets
+.env
+.env*.local
+
+# Temporary Test Artifacts & Videos
+
+*.rar
+*.zip
+*.tar.gz
+
+.tmp/
+tmp/
+
+# Editor & OS Files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+electron/preload.cjs
+electron/dist/
+.test-build/
+*-memories.json
+memories.db*

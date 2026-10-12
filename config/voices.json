@@ -1,0 +1,170 @@
+[
+  {
+    "name": "Aoede",
+    "gender": "Femenina",
+    "trait": "Elegante y cautivadora",
+    "description": "Voz femenina principal de Cristi. Sofisticada, cálida, dulce y con dicción envolvente.",
+    "isRecommended": true,
+    "isUniversal": true,
+    "supportedModels": [
+      "gemini-2.5-flash-native-audio-preview-12-2025",
+      "gemini-2.5-flash-native-audio-preview-09-2025",
+      "gemini-3.1-flash-live-preview",
+      "gemini-3.8-live"
+    ],
+    "fallbackVoice": "Aoede"
+  },
+  {
+    "name": "Despina",
+    "gender": "Femenina",
+    "trait": "Cálida, Acogedora & Seductora",
+    "description": "Voz femenina cálida y que invita, de tono medio claro. Suena amigable, confiable y sumamente atractiva.",
+    "isRecommended": true,
+    "isSexy": true,
+    "isUniversal": true,
+    "supportedModels": [
+      "gemini-2.5-flash-native-audio-preview-12-2025",
+      "gemini-2.5-flash-native-audio-preview-09-2025",
+      "gemini-3.1-flash-live-preview",
+      "gemini-3.8-live"
+    ],
+    "fallbackVoice": "Despina"
+  },
+  {
+    "name": "Sulafat",
+    "gender": "Femenina",
+    "trait": "Segura, Persuasiva & Cautivadora",
+    "description": "Voz femenina cálida y segura, de tono medio claro, con articulación convincente y magnética.",
+    "isRecommended": true,
+    "isSexy": true,
+    "isUniversal": true,
+    "supportedModels": [
+      "gemini-2.5-flash-native-audio-preview-12-2025",
+      "gemini-2.5-flash-native-audio-preview-09-2025",
+      "gemini-3.1-flash-live-preview",
+      "gemini-3.8-live"
+    ],
+    "fallbackVoice": "Sulafat"
+  },
+  {
+    "name": "Vindemiatrix",
+    "gender": "Femenina",
+    "trait": "Serena, Misteriosa & Envolvente",
+    "description": "Voz femenina serena y reflexiva, de tono medio-bajo, transmitiendo madurez, sabiduría y autoridad suave.",
+    "isRecommended": true,
+    "isSexy": true,
+    "isUniversal": true,
+    "supportedModels": [
+      "gemini-2.5-flash-native-audio-preview-12-2025",
+      "gemini-2.5-flash-native-audio-preview-09-2025",
+      "gemini-3.1-flash-live-preview",
+      "gemini-3.8-live"
+    ],
+    "fallbackVoice": "Vindemiatrix"
+  },
+  {
+    "name": "Callirrhoe",
+    "gender": "Femenina",
+    "trait": "Directa, Enérgica & Profesional",
+    "description": "Voz femenina segura y clara, de tono medio, proyectando agilidad técnica y energía.",
+    "isRecommended": false,
+    "isUniversal": true,
+    "supportedModels": [
+      "gemini-2.5-flash-native-audio-preview-12-2025",
+      "gemini-2.5-flash-native-audio-preview-09-2025",
+      "gemini-3.1-flash-live-preview",
+      "gemini-3.8-live"
+    ],
+    "fallbackVoice": "Callirrhoe"
+  },
+  {
+    "name": "Erinome",
+    "gender": "Femenina",
+    "trait": "Sofisticada, Calmada & Articulada",
+    "description": "Voz femenina profesional y bien articulada, con tono medido que transmite inteligencia y calma.",
+    "isRecommended": false,
+    "isUniversal": true,
+    "supportedModels": [
+      "gemini-2.5-flash-native-audio-preview-12-2025",
+      "gemini-2.5-flash-native-audio-preview-09-2025",
+      "gemini-3.1-flash-live-preview",
+      "gemini-3.8-live"
+    ],
+    "fallbackVoice": "Erinome"
+  },
+  {
+    "name": "Kore",
+    "gender": "Femenina",
+    "trait": "Calmada y empática",
+    "description": "Voz femenina serena, reconfortante y dulce.",
+    "isRecommended": false,
+    "isUniversal": true,
+    "supportedModels": [
+      "gemini-2.5-flash-native-audio-preview-12-2025",
+      "gemini-2.5-flash-native-audio-preview-09-2025",
+      "gemini-3.1-flash-live-preview",
+      "gemini-3.8-live"
+    ],
+    "fallbackVoice": "Kore"
+  },
+  {
+    "name": "Laomedeia",
+    "gender": "Femenina",
+    "trait": "Inteligente, Curiosa & Conversacional",
+    "description": "Voz femenina clara y conversada, de tono medio con excelente dinamismo para dialogar.",
+    "isRecommended": false,
+    "isUniversal": true,
+    "supportedModels": [
+      "gemini-2.5-flash-native-audio-preview-12-2025",
+      "gemini-2.5-flash-native-audio-preview-09-2025",
+      "gemini-3.1-flash-live-preview",
+      "gemini-3.8-live"
+    ],
+    "fallbackVoice": "Laomedeia"
+  },
+  {
+    "name": "Leda",
+    "gender": "Femenina",
+    "trait": "Juvenil y animada",
+    "description": "Tono juvenil, despierto y enérgico.",
+    "isRecommended": false,
+    "isUniversal": true,
+    "supportedModels": [
+      "gemini-2.5-flash-native-audio-preview-12-2025",
+      "gemini-2.5-flash-native-audio-preview-09-2025",
+      "gemini-3.1-flash-live-preview",
+      "gemini-3.8-live"
+    ],
+    "fallbackVoice": "Leda"
+  },
+  {
+    "name": "Pulcherrima",
+    "gender": "Femenina",
+    "trait": "Ultra Animada, Alegre & Radiante",
+    "description": "Voz femenina brillante y enérgica, de vivacidad chispeante y motivadora.",
+    "isRecommended": false,
+    "isUniversal": true,
+    "supportedModels": [
+      "gemini-2.5-flash-native-audio-preview-12-2025",
+      "gemini-2.5-flash-native-audio-preview-09-2025",
+      "gemini-3.1-flash-live-preview",
+      "gemini-3.8-live"
+    ],
+    "fallbackVoice": "Pulcherrima"
+  },
+  {
+    "name": "Zephyr",
+    "gender": "Femenina",
+    "trait": "Suave y relajante",
+    "description": "Voz susurrada y aterciopelada, ideal para sesiones nocturnas.",
+    "isRecommended": false,
+    "isUniversal": true,
+    "supportedModels": [
+      "gemini-2.5-flash-native-audio-preview-12-2025",
+      "gemini-2.5-flash-native-audio-preview-09-2025",
+      "gemini-3.1-flash-live-preview",
+      "gemini-3.8-live"
+    ],
+    "fallbackVoice": "Zephyr"
+  }
+]

@@ -1,0 +1,213 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+}
+
+@layer base {
+  :root {
+    --background: #09090b;
+    --foreground: #fafafa;
+    --border: #27272a;
+    --primary: #ffffff;
+    --primary-foreground: #09090b;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+  }
+  * {
+    @apply border-border outline-none;
+  }
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-track {
+    background: #09090b;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: #27272a;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+  }
+  canvas {
+    image-rendering: crisp-edges;
+  }
+  .hud-corner {
+    @apply pointer-events-none;
+  }
+  body, html {
+    @apply bg-transparent text-foreground font-sans overflow-hidden m-0 p-0 w-full h-full;
+  }
+}
+
+@layer components {
+  /* ========================================================
+     TAILWIND COMPONENTS - SHADCN UI REFACTOR 
+     ======================================================== */
+
+  /* FIXES FOR DRAG AND CLICK PASSTHROUGH */
+
+  .app-container { @apply relative w-screen h-screen overflow-hidden transition-colors duration-300; }
+  .app-container.solid-backdrop { @apply bg-transparent pointer-events-auto; }
+  /*
+   * transparent-backdrop: el contenedor raíz NO tiene pointer-events-none.
+   * Cada hijo controla sus propios pointer-events individualmente.
+   * El canvas WebGL es pointer-events-none; la barra de herramientas y el
+   * menú contextual son pointer-events-auto — ambos correctamente interactivos.
+   */
+  .app-container.transparent-backdrop { @apply bg-transparent; }
+
+  /* Ensure all UI overlays capture pointer events */
+  .hud-toast-viewport, .hud-top-bar, .hud-bottom-dock-wrapper, .cristi-widgets-viewport, .performance-hud-container, .camera-pip {
+    @apply pointer-events-auto;
+  }
+
+  .screen-picker-overlay {
+    @apply fixed inset-0 z-99999 cursor-crosshair select-none bg-black/40;
+  }
+
+  .screen-overlay-fullscreen {
+    @apply fixed inset-0 pointer-events-none;
+  }
+
+  .live2d-hit-target {
+    @apply absolute inset-0 z-20 cursor-grab bg-transparent;
+    pointer-events: auto;
+  }
+  .live2d-hit-target.dragging {
+    @apply cursor-grabbing;
+  }
+  .zen-fadeable-ui {
+    @apply transition-all duration-300;
+  }
+  .zen-ui-hidden {
+    @apply opacity-0 pointer-events-none -translate-y-4;
+  }
+  .hud-idle-faded {
+    @apply opacity-100;
+  }
+  .hud-bottom-dock-wrapper:hover, .zen-fadeable-ui:hover {
+    @apply opacity-100;
+  }
+
+  /* --- TOAST CONTAINER --- */
+  .hud-toast-viewport {
+    @apply fixed bottom-24 right-4 flex flex-col gap-2 z-99999;
+  }
+  .hud-toast-card {
+    @apply relative flex items-start gap-3 p-3 bg-zinc-950 border border-zinc-800 shadow-xl text-zinc-100 text-sm min-w-70 max-w-100 border-l-4 overflow-hidden pointer-events-auto animate-[slideIn_0.2s_ease-out_forwards];
+  }
+  .hud-toast-error { @apply border-l-rose-500; }
+  .hud-toast-success { @apply border-l-emerald-500; }
+  .hud-toast-warning { @apply border-l-amber-500; }
+  .hud-toast-info { @apply border-l-white; }
+  .hud-toast-content { @apply flex items-start gap-3 w-full; }
+  .hud-toast-icon-box { @apply flex items-center justify-center pt-0.5; }
+  .hud-toast-body { @apply flex flex-col flex-1 gap-1; }
+  .hud-toast-header { @apply flex items-center justify-between gap-2; }
+  .hud-toast-title { @apply font-bold text-xs uppercase tracking-wider text-zinc-100; }
+  .hud-toast-badge { @apply px-1.5 py-0.5 bg-zinc-800 text-[9px] uppercase font-bold text-zinc-400; }
+  .hud-toast-desc { @apply text-zinc-400 text-xs; }
+  .hud-toast-dismiss { @apply absolute top-2 right-2 text-zinc-500 hover:text-white transition-colors bg-transparent border-0 p-1 cursor-pointer; }
+  .hud-toast-progress { @apply absolute bottom-0 left-0 h-0.5 bg-current opacity-30 origin-left; }
+
+  /* --- DESKTOP WIDGETS --- */
+  .cristi-widgets-viewport {
+    @apply fixed top-4 right-4 flex flex-col gap-3 z-99;
+  }
+  .cristi-widget-card {
+    @apply relative flex items-center gap-3 p-3 bg-zinc-950/90 backdrop-blur-sm border border-zinc-800 shadow-xl min-w-62.5 transition-all duration-300;
+  }
+  .cristi-widget-card.done {
+    @apply opacity-50 grayscale;
+  }
+  .cristi-widget-icon-box { @apply p-2 bg-zinc-900 border border-zinc-800; }
+  .cristi-widget-info { @apply flex flex-col flex-1 gap-0.5; }
+  .cristi-widget-header { @apply flex justify-between items-center; }
+  .cristi-widget-title { @apply font-bold text-xs uppercase text-white; }
+  .cristi-widget-badge { @apply px-1.5 py-0.5 bg-zinc-800 text-[9px] font-bold text-zinc-300; }
+  .cristi-widget-desc { @apply text-[11px] text-zinc-400; }
+  .cristi-widget-progress-bg { @apply w-full h-1 bg-zinc-800 mt-1; }
+  .cristi-widget-progress-fill { @apply h-full bg-white transition-all duration-300; }
+  .cristi-widget-actions { @apply flex items-center gap-1.5 ml-2 relative z-20 pointer-events-auto; }
+  .cristi-widget-action-btn { @apply p-1.5 rounded bg-zinc-900/90 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-all cursor-pointer pointer-events-auto border border-zinc-700/60 flex items-center justify-center min-w-6.5 min-h-6.5 active:scale-95; }
+  .cristi-widget-action-btn.dismiss:hover { @apply bg-rose-950/80 text-rose-300 border-rose-500/80; }
+  .cristi-widget-action-btn.check:hover { @apply bg-emerald-950/80 text-emerald-300 border-emerald-500/80; }
+
+  /* --- PERFORMANCE HUD --- */
+  .performance-hud-container { @apply fixed top-4 left-4 z-99 pointer-events-auto; }
+  .perf-hud-glass-panel { @apply relative bg-zinc-950/90 backdrop-blur-md border border-zinc-800 p-3 shadow-xl min-w-55 font-mono; }
+  .perf-hud-header { @apply flex items-center justify-between pb-2 mb-2 border-b border-zinc-800; }
+  .perf-hud-title-group { @apply flex items-center gap-2; }
+  .perf-hud-title { @apply font-bold text-[10px] text-zinc-300 uppercase tracking-widest; }
+  .perf-hud-badge { @apply px-1 bg-white text-zinc-950 text-[9px] font-bold; }
+  .perf-hud-body { @apply flex flex-col gap-1; }
+  .perf-row { @apply flex justify-between items-center py-0.5 border-b border-zinc-800/50 last:border-0; }
+  .perf-label { @apply text-[10px] text-zinc-500 uppercase; }
+  .perf-value { @apply text-[10px] text-zinc-100 font-bold; }
+  .perf-value.warning { @apply text-amber-400; }
+  .perf-value.critical { @apply text-rose-500 animate-pulse; }
+
+  /* --- CAMERA PREVIEW --- */
+  .camera-pip { @apply fixed top-4 left-4 z-98 w-64 h-48 bg-zinc-950 border border-zinc-800 shadow-xl overflow-hidden pointer-events-auto transition-all duration-300; }
+  .camera-pip.expanded { @apply w-80 h-60; }
+  .camera-pip.with-manager { @apply top-25; }
+  .camera-video-feed { @apply absolute inset-0 w-full h-full object-cover; }
+  .camera-hud-canvas { @apply absolute inset-0 w-full h-full pointer-events-none; }
+  .camera-header-bar { @apply absolute top-0 left-0 right-0 p-2 flex justify-between items-center bg-linear-to-b from-black/80 to-transparent; }
+  .camera-status-pill { @apply px-2 py-0.5 flex items-center gap-1.5 text-[9px] font-bold uppercase rounded-none; }
+  .camera-rec-dot { @apply w-1.5 h-1.5 rounded-full bg-current animate-pulse; }
+  
+  
+  /* --- SCREEN REGION OVERLAY --- */
+  .cristi-screen-overlay-canvas { @apply absolute inset-0 w-full h-full pointer-events-none z-100; }
+  
+  /* Fallbacks for HUD */
+  .hud-dock { @apply flex flex-row items-center gap-1 bg-zinc-950 border border-zinc-800 p-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.8)]; }
+  .hud-bottom-dock-wrapper { @apply fixed bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-99; }
+  .hud-call-btn { @apply flex flex-row items-center gap-2 px-3 py-1.5 text-xs font-bold uppercase transition-colors bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white border border-zinc-800; }
+  .hud-call-btn.active { @apply bg-white text-zinc-950 border-white; }
+  .hud-icon-btn { @apply p-2 transition-colors flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800; }
+  .hud-icon-btn.active { @apply text-white bg-zinc-800; }
+  .hud-dock-divider { @apply w-px h-6 bg-zinc-800 mx-1; }
+  .hud-top-bar { @apply fixed top-4 left-1/2 -translate-x-1/2 flex items-center justify-between gap-4 bg-zinc-950 border border-zinc-800 p-2 shadow-2xl z-99; }
+  .hud-screen-watch-badge { @apply px-2 py-1 bg-zinc-900 border border-zinc-800 text-zinc-300 text-[10px] font-bold uppercase flex items-center gap-1.5; }
+  .hud-screen-watch-dot { @apply w-2 h-2 rounded-full bg-emerald-500 animate-pulse; }
+  .hud-spinner-mini { @apply animate-spin w-3 h-3 border-2 border-zinc-500 border-t-zinc-100 rounded-full; }
+
+  /* ========================================================
+     TAILWIND COMPONENTS - CLEANED & MODERNIZED
+     ======================================================== */
+
+  /* ========================================================
+     CONTEXT MENU & PERFORMANCE HUD TAILWIND COMPONENTS
+     ======================================================== */
+  .custom-context-menu {
+    @apply border border-purple-500/35 bg-zinc-950/95 backdrop-blur-2xl shadow-[0_16px_45px_-8px_rgba(0,0,0,0.9),0_0_25px_rgba(168,85,247,0.18)];
+  }
+
+  .context-menu-item {
+    @apply relative overflow-hidden;
+  }
+
+  .context-model-expr-btn {
+    @apply transition-all duration-150 hover:shadow-[0_0_10px_rgba(168,85,247,0.4)];
+  }
+
+  .performance-hud-container {
+    @apply will-change-transform;
+  }
+
+  .perf-bar-scanline {
+    @apply relative overflow-hidden;
+  }
+
+  .perf-status-pill-pulse {
+    @apply animate-pulse;
+  }
+
+  .hidden { @apply hidden; }
+}

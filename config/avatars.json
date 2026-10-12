@@ -1,0 +1,4 @@
+[
+  { "id": "yanderegirl", "name": "Cristi Gótica (Yandere Girl)", "path": "/models/live2d/yanderegirl/yanderegirl.model3.json", "scale": 0.28, "anchorY": 0.5, "defaultEmotion": "idle" },
+  { "id": "jane_doe", "name": "Jane Doe (ZZZ)", "path": "/models/live2d/jane_doe/简.model3.json", "scale": 0.25, "anchorY": 0.5, "defaultEmotion": "idle" }
+]

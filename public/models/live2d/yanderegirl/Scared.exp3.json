@@ -1,0 +1,35 @@
+{
+    "Type": "Live2D Expression",
+    "Parameters": [
+        {
+            "Id": "ParamBrowLY",
+            "Value": 1.0,
+            "Blend": "Add"
+        },
+        {
+            "Id": "ParamBrowRY",
+            "Value": 1.0,
+            "Blend": "Add"
+        },
+        {
+            "Id": "ParamMouthForm",
+            "Value": -0.7257248759269714,
+            "Blend": "Add"
+        },
+        {
+            "Id": "ParamCheek",
+            "Value": 0.0,
+            "Blend": "Add"
+        },
+        {
+            "Id": "ParamScared",
+            "Value": 1.0,
+            "Blend": "Add"
+        },
+        {
+            "Id": "ParamDepressed",
+            "Value": 1.0,
+            "Blend": "Add"
+        }
+    ]
+}

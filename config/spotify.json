@@ -1,0 +1,53 @@
+{
+  "clientId": "137a82bce2e94563959a2d99bca747b7",
+  "clientSecret": "16568f3d8bb84ff1af8bf6d488fdd900",
+  "redirectUri": "http://127.0.0.1:8888/callback",
+  "accessToken": "BQCaHE_e59RKlxcIoXboel8w_jXkBNk14mI4eF9eunXPC8d-Vw_qIHX_zt-9ysw73bnDIy1h_VFzZHT9NLuAu9JkP205G2UiwH77QGV8Tu23UMnCn05Fm9RnKEIDiK5SGxOASTiBNUw1fQn2B89pRbKu2l6XTUVgq1G7dInzZdvTaMa-IMpCsv07WCowOjGutlIClA6_Q5Ha2xN1vT7VlXNbfuan5UtcFmiSqY2Ukgd5DDy1nKBkfTKuZyRayX-m7bAJKBdlucSweRGCMaYmUEGkl_8XcNoUirBJPMhblwICMGO2eI6gIPaptmMuZgecL0Kt7bfLlgppfO9q-7uktx2aGyqoyofK82iWMyMoqKjrFDq9jwkscz3L-TTp4y022qE",
+  "refreshToken": "AQBEh0fkD9XQqXZxPadErWv0cBrxaHmJyEBAqSau69SnmClazynVd4rprWCZidSQv_G6Ja0zCPiBOFPI9ASu3Me7_1Li36PdHdyhlbUyNL1HfY8t5KE5wFlTP7BTJZke_A4",
+  "expiresAt": 1791689827148,
+  "authenticated": true,
+  "userProfile": {
+    "display_name": "A Color",
+    "product": "premium"
+  },
+  "preferredDevice": "97bfcccf42e3dbd09237579af73339a4ee0f4fb4",
+  "enableLive2dReactions": true,
+  "moodMapping": {
+    "lofi": {
+      "emotion": "idle",
+      "motion": "sway"
+    },
+    "chill": {
+      "emotion": "idle",
+      "motion": "sway"
+    },
+    "rock": {
+      "emotion": "happy",
+      "motion": "nod"
+    },
+    "metal": {
+      "emotion": "crazy",
+      "motion": "headbang"
+    },
+    "love": {
+      "emotion": "love",
+      "motion": "blush"
+    },
+    "romance": {
+      "emotion": "blush",
+      "motion": "blush"
+    },
+    "sad": {
+      "emotion": "sad",
+      "motion": "down"
+    },
+    "dance": {
+      "emotion": "happy",
+      "motion": "dance"
+    },
+    "dark": {
+      "emotion": "yandere",
+      "motion": "smirk"
+    }
+  }
+}

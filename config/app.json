@@ -1,0 +1,23 @@
+{
+  "apiKey": "",
+  "activeModelId": "gemini-2.5-flash-native-audio-preview-12-2025",
+  "activeVoiceName": "Despina",
+  "voiceVolume": 100,
+  "workspacePath": "C:\\React-Nextjs-Projects",
+  "avatarViewMode": "full",
+  "live2dVisible": true,
+  "live2dModelId": "jane_doe",
+  "zenMode": false,
+  "logLevel": "info",
+  "allowedFolders": {
+    "desktop": true,
+    "downloads": true,
+    "documents": true,
+    "pictures": true,
+    "videos": true,
+    "music": true
+  },
+  "customAllowedPaths": [],
+  "modelId": "gemini-2.5-flash-native-audio-preview-12-2025",
+  "voiceName": "Despina"
+}

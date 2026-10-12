@@ -1,0 +1,29 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "yanderegirl.moc3",
+		"Textures": [
+			"yanderegirl.8192/texture_00.png"
+		],
+		"Physics": "yanderegirl.physics3.json",
+		"DisplayInfo": "yanderegirl.cdi3.json",
+		"Expressions": [
+			{ "Name": "Crazy",   "File": "Crazy.exp3.json" },
+			{ "Name": "Mad",     "File": "Mad.exp3.json" },
+			{ "Name": "Scared",  "File": "Scared.exp3.json" },
+			{ "Name": "Yandere", "File": "Yandere.exp3.json" }
+		]
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": []
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		}
+	]
+}
