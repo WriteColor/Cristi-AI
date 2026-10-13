@@ -1,5 +1,5 @@
 import { handleTrusted, onTrusted } from '../security/CapabilityRouter';
-import { BrowserWindow, screen, app } from 'electron';
+import { BrowserWindow, screen, app, desktopCapturer } from 'electron';
 import { windowManager } from '../windows/windowManager';
 import { processManager } from '../core/processManager';
 import { DisplayInfo, InteractiveHitbox, ProcessMemoryResult, ProcessMetricInfo } from '../types/electron.types';
@@ -8,38 +8,146 @@ import { DisplayInfo, InteractiveHitbox, ProcessMemoryResult, ProcessMetricInfo 
 interface ExtendedBrowserWindow extends BrowserWindow {
   _lastIgnore?: boolean;
   _lastForward?: boolean;
+  _manualIgnoreOverride?: boolean;
+}
+
+let activeHitboxes: InteractiveHitbox[] = [];
+let hitboxIntervalId: NodeJS.Timeout | null = null;
+let capturableWindowsCache: {
+  timestamp: number;
+  data: Array<{ id: string; name: string; thumbnail?: string }>;
+} | null = null;
+
+function startHitboxTracking(): void {
+  if (hitboxIntervalId !== null) return;
+
+  hitboxIntervalId = setInterval(() => {
+    const mainWin = windowManager.getMainWindow() as ExtendedBrowserWindow | null;
+    if (!mainWin || mainWin.isDestroyed() || !mainWin.isVisible() || mainWin.isMinimized()) {
+      return;
+    }
+
+    // If renderer explicitly requested interaction lock (manual override)
+    if (mainWin._manualIgnoreOverride === false) {
+      if (mainWin._lastIgnore !== false) {
+        mainWin._lastIgnore = false;
+        mainWin.setIgnoreMouseEvents(false);
+      }
+      return;
+    }
+
+    if (activeHitboxes.length === 0) {
+      if (mainWin._lastIgnore !== true) {
+        mainWin._lastIgnore = true;
+        mainWin.setIgnoreMouseEvents(true);
+      }
+      return;
+    }
+
+    const cursorPoint = screen.getCursorScreenPoint();
+    let winBounds: { x: number; y: number; width: number; height: number };
+    try {
+      winBounds = mainWin.getBounds();
+    } catch (_) {
+      return;
+    }
+
+    const localX = cursorPoint.x - winBounds.x;
+    const localY = cursorPoint.y - winBounds.y;
+
+    const isHovering = activeHitboxes.some((box) => {
+      return (
+        localX >= box.x &&
+        localX <= box.x + box.width &&
+        localY >= box.y &&
+        localY <= box.y + box.height
+      );
+    });
+
+    const shouldIgnore = !isHovering;
+    if (mainWin._lastIgnore !== shouldIgnore) {
+      mainWin._lastIgnore = shouldIgnore;
+      // Strictly without forward: true to permanently eliminate Windows WH_MOUSE_LL hook
+      mainWin.setIgnoreMouseEvents(shouldIgnore);
+    }
+  }, 30);
 }
 
 /**
  * Registers window management and display IPC handlers.
  */
 export function registerWindowIpc(): void {
+  // Start background hitbox collision detection loop
+  startHitboxTracking();
+
   // ── Click-Through Toggle (Native Event-Driven) ────────────────────────────
-  onTrusted('set-ignore-mouse-events', (event, ignore: unknown, options?: unknown) => {
+  onTrusted('set-ignore-mouse-events', (event, ignore: unknown) => {
     try {
       const win = BrowserWindow.fromWebContents(event.sender) as ExtendedBrowserWindow | null;
       if (!win || win.isDestroyed()) return;
 
       const ignoreBool = Boolean(ignore);
-      const forwardBool = typeof options === 'object' && options !== null && 'forward' in options
-        ? Boolean((options as { forward?: unknown }).forward)
-        : false;
+      win._manualIgnoreOverride = ignoreBool ? undefined : false;
 
-      if (win._lastIgnore === ignoreBool && win._lastForward === forwardBool) {
+      if (win._lastIgnore === ignoreBool) {
         return; // Deduplicate call in main process
       }
 
       win._lastIgnore = ignoreBool;
-      win._lastForward = forwardBool;
-      win.setIgnoreMouseEvents(ignoreBool, { forward: forwardBool });
+      // Strictly without forward: true to permanently eliminate Windows WH_MOUSE_LL hook
+      win.setIgnoreMouseEvents(ignoreBool);
     } catch (err) {
       console.error('[WindowIpc] Error setting ignore mouse events:', err);
     }
   });
 
-  // ── Hitbox Synchronization (No-op retained for backwards IPC compatibility) ──
-  onTrusted('sync-interactive-hitboxes', () => {
-    // No-op: cursor polling completely eliminated in favor of native forwarded mouse events
+  // ── Hitbox Synchronization (Zero-Lag Non-Hook Collision Testing) ───────────
+  onTrusted('sync-interactive-hitboxes', (_event, hitboxes: unknown) => {
+    if (Array.isArray(hitboxes)) {
+      activeHitboxes = hitboxes.filter((b): b is InteractiveHitbox => (
+        b &&
+        typeof b === 'object' &&
+        typeof (b as any).x === 'number' &&
+        typeof (b as any).y === 'number' &&
+        typeof (b as any).width === 'number' &&
+        typeof (b as any).height === 'number' &&
+        (b as any).width > 0 &&
+        (b as any).height > 0
+      ));
+      startHitboxTracking();
+    } else {
+      activeHitboxes = [];
+    }
+  });
+
+  // ── Capturable Windows Source Discovery (Cached to prevent DWM freezes) ────
+  handleTrusted('get-capturable-windows', async () => {
+    const now = Date.now();
+    if (capturableWindowsCache && now - capturableWindowsCache.timestamp < 15000) {
+      return capturableWindowsCache.data;
+    }
+
+    try {
+      const sources = await desktopCapturer.getSources({
+        types: ['window'],
+        fetchWindowIcons: true,
+        thumbnailSize: { width: 48, height: 48 }
+      });
+
+      const result = sources
+        .filter((s) => s.name.trim().length > 0 && !s.name.includes('Cristi AI'))
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          thumbnail: s.thumbnail ? s.thumbnail.toDataURL() : undefined
+        }));
+
+      capturableWindowsCache = { timestamp: now, data: result };
+      return result;
+    } catch (err) {
+      console.error('[WindowIpc] Error fetching capturable windows:', err);
+      return capturableWindowsCache?.data || [];
+    }
   });
 
   // ── Always-On-Top ─────────────────────────────────────────────────────────

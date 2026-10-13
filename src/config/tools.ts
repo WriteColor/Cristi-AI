@@ -66,9 +66,22 @@ function sanitizeDeclaration(decl: GeminiFunctionDeclaration): GeminiFunctionDec
 
 export function getLiveToolsConfig(customMcpDeclarations: GeminiFunctionDeclaration[] = []): LiveToolsConfig[] {
   const baseDeclarations: GeminiFunctionDeclaration[] = _toolRegistry?.getAllDeclarations?.() ?? COMPANION_FUNCTION_DECLARATIONS ?? [];
+  const baseNames = new Set(baseDeclarations.map(d => d.name));
+
+  // Deduplicate MCP tools: avoid registering duplicates of tools already present in toolRegistry
+  const filteredMcp = (Array.isArray(customMcpDeclarations) ? customMcpDeclarations : []).filter(decl => {
+    if (baseNames.has(decl.name)) return false;
+    const stripped = decl.name
+      .replace(/^mcp_cristi_playwright_/, '')
+      .replace(/^mcp_cristi_spotify_/, '');
+    if (baseNames.has(stripped)) return false;
+    if (baseNames.has('spotify_' + stripped)) return false;
+    return true;
+  });
+
   const allDeclarations: GeminiFunctionDeclaration[] = [
     ...baseDeclarations.filter(({ name }) => !LIVE_LATENCY_EXEMPT_TOOL_NAMES.has(name)),
-    ...(Array.isArray(customMcpDeclarations) ? customMcpDeclarations : [])
+    ...filteredMcp
   ].map(sanitizeDeclaration);
 
   return [

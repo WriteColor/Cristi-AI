@@ -17,6 +17,10 @@ export interface SessionState {
   isConnected: boolean;
   isConnecting: boolean;
   errorMessage: string | null;
+  reconnectAttempt: number;
+  maxReconnectAttempts: number;
+  reconnectDelayMs: number;
+  reconnectTargetTime: number | null;
 
   // --- Core Acciones Requeridas ---
   setConnectionState: (connectionState: GeminiLiveConnectionState) => void;
@@ -29,6 +33,8 @@ export interface SessionState {
   setIsConnected: (isConnected: boolean) => void;
   setIsConnecting: (isConnecting: boolean) => void;
   setErrorMessage: (errorMessage: string | null) => void;
+  setReconnectingState: (attempt: number, delayMs: number, maxAttempts?: number) => void;
+  clearReconnectingState: () => void;
   clearLogs: () => void;
 }
 
@@ -45,6 +51,10 @@ export const useSessionStore = create<SessionState>()((set) => ({
   isConnected: false,
   isConnecting: false,
   errorMessage: null,
+  reconnectAttempt: 0,
+  maxReconnectAttempts: 5,
+  reconnectDelayMs: 0,
+  reconnectTargetTime: null,
 
   // Core Actions
   setConnectionState: connectionState => set(connectionView(connectionState)),
@@ -85,5 +95,18 @@ export const useSessionStore = create<SessionState>()((set) => ({
     state.connectionState === 'CONNECTING' || state.connectionState === 'RECONNECTING' ? 'DISCONNECTED' : state.connectionState)),
 
   setErrorMessage: (errorMessage) => set({ errorMessage }),
+  setReconnectingState: (attempt, delayMs, maxAttempts = 5) =>
+    set({
+      reconnectAttempt: attempt,
+      maxReconnectAttempts: maxAttempts,
+      reconnectDelayMs: delayMs,
+      reconnectTargetTime: Date.now() + delayMs,
+    }),
+  clearReconnectingState: () =>
+    set({
+      reconnectAttempt: 0,
+      reconnectDelayMs: 0,
+      reconnectTargetTime: null,
+    }),
   clearLogs: () => set({ recentLogs: [] }),
 }));

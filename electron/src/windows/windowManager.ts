@@ -132,8 +132,8 @@ export class WindowManager {
       this.mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     } catch (_) {}
 
-    // Start in click-through mode — forward mouse events to enable zero-lag DOM hover detection
-    this.mainWindow.setIgnoreMouseEvents(true, { forward: true });
+    // Start in click-through mode without global OS mouse hook (WH_MOUSE_LL)
+    this.mainWindow.setIgnoreMouseEvents(true);
 
     // 'screen-saver', 1 keeps window persistently above all desktop windows with highest OS priority
     this.mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);

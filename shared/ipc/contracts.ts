@@ -28,7 +28,7 @@ const secret = z.enum(['gemini.apiKey', 'spotify.clientSecret']);
 const noArgs = z.tuple([]);
 const screenRegionSchema = z.object({ x_pct: number.min(0).max(100).optional(), y_pct: number.min(0).max(100).optional(),
   w_pct: number.min(1).max(100).optional(), h_pct: number.min(1).max(100).optional() }).strict();
-const screenCaptureRequestSchema = z.object({ region: screenRegionSchema.nullish(), targetWindow: z.string().nullish(), fresh: z.boolean().optional() }).strict();
+const screenCaptureRequestSchema = z.object({ region: screenRegionSchema.nullish(), targetWindow: z.string().nullish(), windowId: z.string().nullish(), displayId: z.union([z.string(), z.number()]).nullish(), fresh: z.boolean().optional() }).strict();
 
 export const requestSchemas = {
   'set-ignore-mouse-events': z.tuple([z.boolean(), z.object({ forward: z.boolean().optional() }).strict().optional()]),
@@ -150,6 +150,7 @@ export const requestSchemas = {
   }).strict()]),
   'browser-close': noArgs,
   'browser-get-status': noArgs,
+  'get-capturable-windows': noArgs,
 } as const;
 
 export type IpcChannel = keyof typeof requestSchemas;
@@ -206,6 +207,10 @@ export interface ScreenCaptureRequest {
   region?: ScreenRegion | null;
   /** Focus and capture only the specified window title or process. */
   targetWindow?: string | null;
+  /** Direct capture filtered by window identifier / HWND via desktopCapturer */
+  windowId?: string | null;
+  /** Monitor selection: 'primary', 'secondary', or numeric/string display ID */
+  displayId?: string | number | null;
   /** Bypass the short native cache for an explicit user/model snapshot. */
   fresh?: boolean;
 }
@@ -271,6 +276,7 @@ export interface IpcResponseMap {
   'move-file': { success: boolean; error?: string };
   'search-directory': Array<{ path: string; name: string; type: 'FILE' | 'DIRECTORY'; size?: number }>;
   'list-windows': Array<{ hwnd: number; pid: number; title: string; process: string; isMinimized: boolean; isMaximized: boolean }>;
+  'get-capturable-windows': Array<{ id: string; name: string; thumbnail?: string }>;
   'focus-os-window': { success: boolean; title?: string; error?: string };
   'manage-os-window': { success: boolean; action: string; error?: string };
   'list-installed-apps': Array<{ name: string; path: string; type: 'shortcut' | 'executable' }>;
@@ -388,6 +394,7 @@ export interface ElectronApiBridge {
   syncInteractiveHitboxes: (hitboxes: unknown[]) => void;
   setAlwaysOnTop: (value: boolean) => void;
   getAlwaysOnTop: () => Promise<boolean>;
+  listCapturableWindows?: () => Promise<Array<{ id: string; name: string; thumbnail?: string }>>;
   focusWindow?: () => void;
   minimizeWindow: () => void;
   showWindow: () => void;

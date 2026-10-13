@@ -762,7 +762,9 @@ export class MemoryService {
 
     if (sections.length === 0) return '';
 
-    return `\n\n=== RECUERDOS Y MEMORIA PERMANENTE DE CRISTI ===\n${sections.join('\n\n')}\nUtiliza estos recuerdos de manera natural, afectuosa y sutil en tus respuestas cuando sean relevantes.`;
+    const silentMemoryDirective = '\n\n[DIRECTIVA DE MEMORIA SILENCIOSA E INMERSIÓN TOTAL]: Tienes estrictamente prohibido verbalizar frases como "He guardado esto en mi memoria", "Anotado en la base de datos", "He registrado tu preferencia" o aludir a acciones de persistencia. La memoria opera 100% en silencio de fondo; tu respuesta auditiva debe fluir con naturalidad humana, afecto y espontaneidad.';
+
+    return `\n\n=== RECUERDOS Y MEMORIA PERMANENTE DE CRISTI ===\n${sections.join('\n\n')}\nUtiliza estos recuerdos de manera natural, afectuosa y sutil en tus respuestas cuando sean relevantes.${silentMemoryDirective}`;
   }
 
   getMemoryContextPrompt(limit = 12, query = ''): string {

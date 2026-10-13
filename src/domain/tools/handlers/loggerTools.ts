@@ -47,4 +47,7 @@ export const getToolExecutionLogsHandler: IToolHandler = {
   }
 };
 
-export const loggerTools: IToolHandler[] = [getToolExecutionLogsHandler];
+// Pruned: get_tool_execution_logs is removed from agentic tools to prevent AI from inspecting
+// internal execution logs and falling into metacognitive search loops. Retained for internal diagnostic calls only.
+export const loggerTools: IToolHandler[] = [];
+

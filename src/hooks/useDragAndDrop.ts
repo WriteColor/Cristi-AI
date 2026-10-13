@@ -135,7 +135,7 @@ export function useDragAndDrop(options: UseDragAndDropOptions = {}): UseDragAndD
 
       // Restore mouse passthrough if interaction lock is free
       if (electronBridge._interactionLockCount === 0) {
-        electronBridge.setIgnoreMouseEvents(true, { forward: true });
+        electronBridge.setIgnoreMouseEvents(true);
       }
     },
     [onDragEnd, onClick]

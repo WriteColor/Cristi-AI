@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Plus, Trash2, Search, Tag, Filter } from 'lucide-react';
+import { Database, Plus, Trash2, Search, Tag, Filter, Sparkles, RefreshCw } from 'lucide-react';
 import { memoryService, MEMORY_CATEGORIES } from '../../domain/integrations/memory/MemoryService.js';
 import { soundFxService } from '../../domain/audio/SoundFxService.js';
 import { toastService } from '../../infrastructure/notifications/toastService.js';
+import { eventBus, EVENTS } from '../../infrastructure/events/eventBus.js';
 
 export const MemoryTab: React.FC = () => {
   const [memories, setMemories] = useState<any[]>(() => {
@@ -32,7 +33,24 @@ export const MemoryTab: React.FC = () => {
       .finally(() => {
         if (!disposed) void refreshMemories().catch(() => undefined);
       });
-    return () => { disposed = true; };
+
+    // Real-time reactive updates from silent background memory saves
+    const unsubUpdated = eventBus.on(EVENTS.MEMORY_UPDATED, () => {
+      if (!disposed) void refreshMemories().catch(() => undefined);
+    });
+    const unsubCreated = eventBus.on(EVENTS.MEMORY_CREATED, () => {
+      if (!disposed) void refreshMemories().catch(() => undefined);
+    });
+    const unsubInvalidated = eventBus.on(EVENTS.MEMORY_INVALIDATED, () => {
+      if (!disposed) void refreshMemories().catch(() => undefined);
+    });
+
+    return () => {
+      disposed = true;
+      unsubUpdated();
+      unsubCreated();
+      unsubInvalidated();
+    };
   }, []);
 
   const handleSaveMemory = async () => {
@@ -169,17 +187,40 @@ export const MemoryTab: React.FC = () => {
       <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
         {filteredMemories.map((m) => {
           const colorClasses = categoryBadgeColors[m.category] || 'text-zinc-400 bg-zinc-800 border-zinc-700';
+          const isAutoCaptured = Boolean(
+            m.source === 'gemini_live' ||
+            m.source === 'auto' ||
+            m.source === 'conversation' ||
+            m.source === 'silent' ||
+            m.isAutoCaptured ||
+            (m.metadata && typeof m.metadata === 'object' && (m.metadata.source === 'auto' || m.metadata.silent === true))
+          );
+
+          const categoryLabels: Record<string, string> = {
+            fact: 'Hechos',
+            preference: 'Preferencias',
+            relationship: 'Relación',
+            task: 'Tareas',
+            conversation: 'Conversación'
+          };
+
           return (
             <div
               key={m.key || m.id}
               className="flex items-center justify-between p-2.5 bg-zinc-900/40 border border-zinc-800 rounded-sm text-xs font-mono hover:border-zinc-700 transition-colors"
             >
               <div className="min-w-0 flex-1 mr-3">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-zinc-200">{m.key || m.id}</span>
                   <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-none border ${colorClasses}`}>
-                    {m.category}
+                    {categoryLabels[m.category] || m.category}
                   </span>
+                  {isAutoCaptured && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 bg-cyan-950/70 text-cyan-300 border border-cyan-800/80 rounded-none flex items-center gap-1">
+                      <Sparkles size={10} className="text-cyan-400" />
+                      Capturado automáticamente
+                    </span>
+                  )}
                   {m.confidence !== undefined && (
                     <span className="text-[10px] text-zinc-500">
                       Conf: {Math.round(m.confidence * 100)}%
@@ -191,7 +232,7 @@ export const MemoryTab: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleDeleteMemory(m.key || m.id)}
-                className="p-1 text-zinc-500 hover:text-rose-400 transition-colors shrink-0"
+                className="p-1 text-zinc-500 hover:text-rose-400 transition-colors shrink-0 cursor-pointer"
                 title="Eliminar recuerdo"
               >
                 <Trash2 size={13} />

@@ -12,7 +12,8 @@ import {
   focusWindow as focusOsWindow,
   manageWindow as manageOsWindow,
   listInstalledApps,
-  launchApp
+  launchApp,
+  isPathProtectedFromModification
 } from '../security/SystemCapabilityService';
 import { readPublicConfig, writePublicConfig } from '../security/PublicConfig';
 import { handleTrusted, onTrusted } from '../security/CapabilityRouter';
@@ -433,6 +434,9 @@ export function registerSystemIpc(rootDir?: string): void {
   handleTrusted('write-file', async (_event, filePath: import("../../../shared/ipc/contracts").FileRequest | string, data: unknown) => {
     try {
       const safePath = await resolveFile(filePath);
+      if (isPathProtectedFromModification(safePath)) {
+        throw new Error(`Operación bloqueada por seguridad: La ruta "${safePath}" pertenece a archivos o directorios críticos del sistema.`);
+      }
       const safeData = typeof data === 'string' ? data : String(data ?? '');
       await fs.promises.mkdir(path.dirname(safePath), { recursive: true });
       await fs.promises.writeFile(safePath, safeData, 'utf8');
@@ -445,6 +449,9 @@ export function registerSystemIpc(rootDir?: string): void {
   handleTrusted('append-file', async (_event, filePath: import("../../../shared/ipc/contracts").FileRequest | string, data: unknown) => {
     try {
       const safePath = await resolveFile(filePath);
+      if (isPathProtectedFromModification(safePath)) {
+        throw new Error(`Operación bloqueada por seguridad: La ruta "${safePath}" pertenece a archivos o directorios críticos del sistema.`);
+      }
       const safeData = typeof data === 'string' ? data : String(data ?? '');
       await fs.promises.mkdir(path.dirname(safePath), { recursive: true });
       await fs.promises.appendFile(safePath, safeData, 'utf8');
@@ -592,19 +599,30 @@ export function registerSystemIpc(rootDir?: string): void {
   });
 
   // ── High-Performance Native Screen Capture ────────────────────────────────
-  handleTrusted('capture-screen-native', async (_event, request: ScreenRegion | { region?: ScreenRegion | null; targetWindow?: string | null; fresh?: boolean } | null = null) => {
+  handleTrusted('capture-screen-native', async (_event, request: ScreenRegion | { region?: ScreenRegion | null; targetWindow?: string | null; windowId?: string | null; displayId?: string | number | null; fresh?: boolean } | null = null) => {
     const isFreshRequest = Boolean(request && typeof request === 'object' && 'fresh' in request && request.fresh);
     const region: ScreenRegion | null = request && typeof request === 'object' && 'region' in request
       ? (request.region ?? null)
-      : (request && typeof request === 'object' && !('targetWindow' in request || 'fresh' in request) ? request as ScreenRegion : null);
+      : (request && typeof request === 'object' && !('targetWindow' in request || 'windowId' in request || 'displayId' in request || 'fresh' in request) ? request as ScreenRegion : null);
     const targetWindowQuery = request && typeof request === 'object' && 'targetWindow' in request && typeof request.targetWindow === 'string'
       ? request.targetWindow.trim().toLowerCase()
       : null;
-    const regionKey = targetWindowQuery
-      ? `win_${targetWindowQuery}`
-      : (region && typeof region === 'object'
-          ? `${Math.round(region.x_pct || 0)}_${Math.round(region.y_pct || 0)}_${Math.round(region.w_pct || 100)}_${Math.round(region.h_pct || 100)}`
-          : 'full');
+    const windowIdQuery = request && typeof request === 'object' && 'windowId' in request && typeof request.windowId === 'string'
+      ? request.windowId.trim()
+      : null;
+    const requestDisplayId = request && typeof request === 'object' && 'displayId' in request && request.displayId != null
+      ? String(request.displayId).trim().toLowerCase()
+      : null;
+
+    const regionKey = windowIdQuery
+      ? `winid_${windowIdQuery}`
+      : (targetWindowQuery
+          ? `win_${targetWindowQuery}`
+          : (requestDisplayId
+              ? `disp_${requestDisplayId}_${region ? `${Math.round(region.x_pct || 0)}_${Math.round(region.y_pct || 0)}_${Math.round(region.w_pct || 100)}_${Math.round(region.h_pct || 100)}` : 'full'}`
+              : (region && typeof region === 'object'
+                  ? `${Math.round(region.x_pct || 0)}_${Math.round(region.y_pct || 0)}_${Math.round(region.w_pct || 100)}_${Math.round(region.h_pct || 100)}`
+                  : 'full')));
 
     const now = Date.now();
     // Return cached frame if within 700ms for identical region (zero GPU contention)
@@ -625,13 +643,26 @@ export function registerSystemIpc(rootDir?: string): void {
     isScreenCaptureInProgress = true;
     const capturePromise = (async () => {
       try {
+        const allDisplays = screen.getAllDisplays();
         let targetDisplay = null;
-        const mainWin = windowManager.getMainWindow();
-        if (mainWin && !mainWin.isDestroyed()) {
-          try {
-            const bounds = mainWin.getBounds();
-            targetDisplay = screen.getDisplayMatching(bounds);
-          } catch (_) {}
+        if (requestDisplayId) {
+          if (requestDisplayId === 'primary') {
+            targetDisplay = screen.getPrimaryDisplay();
+          } else if (requestDisplayId === 'secondary') {
+            targetDisplay = allDisplays.find((d) => d.id !== screen.getPrimaryDisplay()?.id) || screen.getPrimaryDisplay();
+          } else {
+            targetDisplay = allDisplays.find((d) => String(d.id).toLowerCase() === requestDisplayId) || screen.getPrimaryDisplay();
+          }
+        }
+
+        if (!targetDisplay) {
+          const mainWin = windowManager.getMainWindow();
+          if (mainWin && !mainWin.isDestroyed()) {
+            try {
+              const bounds = mainWin.getBounds();
+              targetDisplay = screen.getDisplayMatching(bounds);
+            } catch (_) {}
+          }
         }
         if (!targetDisplay) {
           targetDisplay = screen.getPrimaryDisplay();
@@ -649,7 +680,7 @@ export function registerSystemIpc(rootDir?: string): void {
         const targetW = Math.max(1, Math.min(768, pixelWidth));
         const targetH = Math.max(1, Math.round((pixelHeight / Math.max(1, pixelWidth)) * targetW));
 
-        const capturerTypes: Array<'screen' | 'window'> = targetWindowQuery ? ['window', 'screen'] : ['screen'];
+        const capturerTypes: Array<'screen' | 'window'> = (targetWindowQuery || windowIdQuery) ? ['window'] : ['screen'];
         let sources = [];
         try {
           sources = await desktopCapturer.getSources({
@@ -668,7 +699,10 @@ export function registerSystemIpc(rootDir?: string): void {
         if (!sources || sources.length === 0) return null;
 
         let primarySource = null;
-        if (targetWindowQuery) {
+        if (windowIdQuery) {
+          primarySource = sources.find((s) => s.id === windowIdQuery || s.id.toLowerCase().includes(windowIdQuery.toLowerCase()));
+        }
+        if (!primarySource && targetWindowQuery) {
           primarySource = sources.find((s) => s.name.toLowerCase().includes(targetWindowQuery));
         }
         if (!primarySource) {

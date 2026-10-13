@@ -24,7 +24,7 @@ export function useClickThrough(): UseClickThroughReturn {
   }, []);
 
   const onMouseLeave = useCallback(() => {
-    electronBridge?.setIgnoreMouseEvents(true, { forward: true });
+    electronBridge?.setIgnoreMouseEvents(true);
   }, []);
 
   return {

@@ -6,6 +6,7 @@
 import type { GeminiFunctionDeclaration } from '../../../types/gemini.types';
 // @ts-ignore
 import { modularConfigManager } from '../../../config/ModularConfigManager.ts';
+import { mcpServerRegistry, McpServerConfigSchema } from './McpServerRegistry.ts';
 
 let electronBridge: any = null;
 if (typeof window !== 'undefined' && (window as any).electronBridge) {
@@ -277,6 +278,7 @@ export class MCPClientManager {
         }
       ];
       this.saveServers();
+      mcpServerRegistry.loadInitialConfig(this.servers);
     } catch (err) {
       logger.error('MCP', 'Error cargando servidores MCP:', err);
       this.servers = [];
@@ -322,6 +324,11 @@ export class MCPClientManager {
       throw new Error('Este servidor MCP está bloqueado por la política de integraciones de Cristi AI. Registra uno diferente.');
     }
 
+    const validation = mcpServerRegistry.registerServer(newServer);
+    if (!validation.success) {
+      throw new Error(`Configuración de servidor MCP inválida: ${validation.error}`);
+    }
+
     this.servers.push(newServer);
     this.saveServers();
     await (modularConfigManager as any)?.flush?.();
@@ -340,6 +347,7 @@ export class MCPClientManager {
     const candidate = { ...this.servers[sIdx], ...updates };
     if (this.isRemovedServer(candidate)) return false;
     this.servers[sIdx] = candidate;
+    mcpServerRegistry.registerServer(candidate);
     this.saveServers();
     await (modularConfigManager as any)?.flush?.();
     return true;
@@ -352,6 +360,7 @@ export class MCPClientManager {
   async removeServer(id: string): Promise<boolean> {
     await this.disconnectServer(id);
     this.servers = this.servers.filter((s) => s.id !== id);
+    mcpServerRegistry.unregisterServer(id);
     this.saveServers();
     await (modularConfigManager as any)?.flush?.();
     return true;
@@ -366,6 +375,8 @@ export class MCPClientManager {
     if (!server) return false;
 
     server.enabled = enabled;
+    if (enabled) mcpServerRegistry.enableServer(id);
+    else mcpServerRegistry.disableServer(id);
     this.saveServers();
 
     if (enabled) {

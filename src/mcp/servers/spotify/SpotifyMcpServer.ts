@@ -10,6 +10,7 @@ import { windowsMediaService } from '../../../domain/media/WindowsMediaService';
 import { spotifyEmotionBridge } from './SpotifyEmotionBridge';
 import { electronBridge } from '../../../services/desktop/ElectronBridge';
 import { logger } from '../../../infrastructure/logging/logger';
+import { modularConfigManager } from '../../../config/ModularConfigManager';
 
 export interface McpToolSchema {
   name: string;
@@ -52,6 +53,10 @@ export class SpotifyMcpServer {
             uri: {
               type: 'STRING',
               description: 'URI directa de Spotify (ejemplo: spotify:track:... o spotify:playlist:...)'
+            },
+            user_explicitly_requested: {
+              type: 'BOOLEAN',
+              description: 'Obligatorio. Establece true ÚNICAMENTE si el usuario pidió de forma explícita, directa y consciente reproducir música. Si fue solo una mención casual o ruido dudoso, debe ser false.'
             }
           }
         }
@@ -69,7 +74,12 @@ export class SpotifyMcpServer {
         description: 'Avanza a la siguiente pista o canción en Spotify.',
         parameters: {
           type: 'OBJECT',
-          properties: {}
+          properties: {
+            user_explicitly_requested: {
+              type: 'BOOLEAN',
+              description: 'Obligatorio. Establece true ÚNICAMENTE si el usuario solicitó de forma explícita avanzar o saltar a la siguiente pista.'
+            }
+          }
         }
       },
       {
@@ -77,7 +87,12 @@ export class SpotifyMcpServer {
         description: 'Regresa a la pista o canción anterior en Spotify.',
         parameters: {
           type: 'OBJECT',
-          properties: {}
+          properties: {
+            user_explicitly_requested: {
+              type: 'BOOLEAN',
+              description: 'Obligatorio. Establece true ÚNICAMENTE si el usuario solicitó de forma explícita regresar a la canción anterior.'
+            }
+          }
         }
       },
       {
@@ -94,6 +109,10 @@ export class SpotifyMcpServer {
             percent: {
               type: 'NUMBER',
               description: 'Porcentaje de volumen de 0 a 100 (usado con Spotify Web API).'
+            },
+            user_explicitly_requested: {
+              type: 'BOOLEAN',
+              description: 'Obligatorio. Establece true ÚNICAMENTE si el usuario pidió expresamente cambiar o silenciar el volumen.'
             }
           }
         }
@@ -162,6 +181,28 @@ export class SpotifyMcpServer {
   async executeTool(name: string, args: Record<string, any> = {}, signal?: AbortSignal): Promise<Record<string, any>> {
     if (signal?.aborted) {
       return { status: 'cancelled', cancelled: true };
+    }
+
+    const requiresExplicitConfirmation = [
+      'spotify_play',
+      'playMusic',
+      'spotify_skip_next',
+      'spotify_skip_previous',
+      'spotify_set_volume'
+    ].includes(name);
+
+    const spotifyConfig = modularConfigManager.getSection('spotify');
+    const enforceConfirmation = spotifyConfig?.requireExplicitConfirmation !== false;
+
+    // Guardrail estricto contra alucinaciones o interpretaciones dudosas
+    if (enforceConfirmation && requiresExplicitConfirmation && args?.user_explicitly_requested !== true) {
+      logger.warn('SPOTIFY_GUARDRAIL', `Comando "${name}" bloqueado: falta confirmación explícita del usuario.`);
+      return {
+        status: 'confirmation_required',
+        action: name,
+        needs_verbal_confirmation: true,
+        message: 'No se ejecutó la acción en Spotify porque no se detectó una orden explícita e inequívoca del usuario. Por favor, pide confirmación verbal a Ariel antes de realizar esta acción musical.'
+      };
     }
 
     try {

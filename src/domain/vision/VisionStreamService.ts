@@ -1,8 +1,9 @@
 /**
  * Cristi AI - VisionStreamService
  * High-performance, low-latency visual perception engine for real-time screen & camera streaming to Gemini Live.
- * Throttles screen capture to strict 0.5 FPS during active voice calls to eliminate GPU/audio contention.
- * Offloads frame processing exclusively to 'screen.worker.ts' via 'ScreenClient.ts' with transferable ArrayBuffers.
+ * Implements a unified, continuous video pipeline over WebSocket with congestion backpressure.
+ * Selectable capture modes: Fullscreen (primary/secondary monitor), Region, Application Window, Physical Camera.
+ * Regulates sampling rate between 0.5 FPS and 1.0 FPS, preventing turn saturation and GPU/audio starvation.
  */
 
 import { electronBridge } from '../../services/desktop/ElectronBridge';
@@ -10,7 +11,20 @@ import { logger } from '../../infrastructure/logging/logger';
 import { eventBus, EVENTS } from '../../infrastructure/events/eventBus';
 import { VisionFrameDispatcher, LiveSessionLike } from './VisionFrameDispatcher';
 import { CaptureLoop } from '../sensory/vision/CaptureLoop';
-import type { ScreenRegion } from '../../../shared/ipc/contracts';
+import { useSessionStore } from '../../stores/useSessionStore';
+import type { ScreenRegion, ScreenCaptureRequest } from '../../../shared/ipc/contracts';
+
+export type VisionCaptureMode = 'fullscreen' | 'region' | 'window' | 'camera';
+
+export interface VisionMonitoringOptions {
+  mode?: VisionCaptureMode;
+  fps?: number;
+  displayId?: 'primary' | 'secondary' | string | number | null;
+  region?: ScreenRegion | null;
+  targetWindow?: string | null;
+  windowId?: string | null;
+  deviceId?: string | null;
+}
 
 export interface VisionStreamServiceOptions {
   socketRef?: { current: LiveSessionLike | null } | null;
@@ -27,11 +41,18 @@ export class VisionStreamService {
   public socketRef: { current: LiveSessionLike | null } | null;
   public frameDispatcher: VisionFrameDispatcher;
 
+  // Active Capture State
+  public activeMode: VisionCaptureMode | null = null;
+  public isStreaming = false;
+
   // Screen Streamer State
   public isScreenStreaming = false;
   public screenLoop: CaptureLoop;
-  public screenFPS = 0.5; // Strict 0.5 FPS default during active calls
+  public screenFPS = 0.5; // Controlled between 0.5 and 1.0 FPS
   public screenRegion: ScreenRegion | null = null;
+  public targetDisplayId: 'primary' | 'secondary' | string | number | null = null;
+  public targetWindow: string | null = null;
+  public targetWindowId: string | null = null;
 
   // Voice Call & Speaking State
   public isVoiceCallActive = false;
@@ -65,14 +86,14 @@ export class VisionStreamService {
 
     this.screenLoop = new CaptureLoop({
       capture: async () => {
-        const region = this.screenRegion;
-        // Native screen capture delegates BGRA-to-JPEG and cropping exclusively to screen.worker.ts
-        const frame = await this.captureScreenNative(region);
-        return region === this.screenRegion ? frame : null;
+        // Native screen capture delegates BGRA-to-JPEG and cropping exclusively to worker thread
+        return await this.captureCurrentScreenTarget();
       },
       onFrame: frame => this.frameDispatcher.queueFrame({ source: 'screen', base64: frame, timestamp: Date.now() }),
       shouldCapture: () => Boolean(
         this.socketRef?.current?.isConnected &&
+        useSessionStore.getState().isConnected &&
+        !this.isAiSpeaking && // Backpressure: drop frames if AI is actively speaking
         ((this.socketRef.current.websocket?.bufferedAmount ?? 0) <= 65536)
       ),
       onError: error => logger.warn('VISION', 'Error capturando pantalla:', error.message)
@@ -89,9 +110,32 @@ export class VisionStreamService {
       onFrame: frame => this.frameDispatcher.queueFrame({ source: 'camera', base64: frame, timestamp: Date.now() }),
       shouldCapture: () => Boolean(
         this.socketRef?.current?.isConnected &&
+        useSessionStore.getState().isConnected &&
+        !this.isAiSpeaking && // Backpressure: pause visual sampling while AI speaks
         ((this.socketRef.current.websocket?.bufferedAmount ?? 0) <= 65536)
       ),
       onError: error => logger.warn('VISION', 'Error capturando cámara:', error.message)
+    });
+
+    // Suspensión reactiva: desconexión de Gemini Live suspende inmediatamente los bucles de captura
+    useSessionStore.subscribe((state) => {
+      if (!state.isConnected) {
+        if (this.screenLoop.active) this.screenLoop.stop();
+        if (this.cameraLoop.active) this.cameraLoop.stop();
+      } else {
+        if (this.isScreenStreaming && !this.screenLoop.active) {
+          const intervalMs = this.isAiSpeaking || this.isVoiceCallActive
+            ? 2000
+            : Math.max(1000, Math.round(1000 / this.screenFPS));
+          this.screenLoop.start(intervalMs);
+        }
+        if (this.isCameraStreaming && !this.cameraLoop.active) {
+          const intervalMs = this.isAiSpeaking || this.isVoiceCallActive
+            ? 2000
+            : Math.max(1000, Math.round(1000 / this.cameraFPS));
+          this.cameraLoop.start(intervalMs);
+        }
+      }
     });
 
     this.unsubAudioStart = eventBus.on(EVENTS.AUDIO_START, () => {
@@ -102,8 +146,8 @@ export class VisionStreamService {
     this.unsubAudioEnd = eventBus.on(EVENTS.AUDIO_END, () => {
       this.isAiSpeaking = false;
       this.applyActiveCallThrottling();
-      this.screenLoop.requestImmediate();
-      this.cameraLoop.requestImmediate();
+      if (this.isScreenStreaming) this.screenLoop.requestImmediate();
+      if (this.isCameraStreaming) this.cameraLoop.requestImmediate();
     });
   }
 
@@ -113,14 +157,19 @@ export class VisionStreamService {
   }
 
   /**
-   * Enforces strict 0.5 FPS (2000ms period) during active calls / speaking to prevent GPU/Audio starvation
+   * Enforces strict rate regulation (0.5 FPS during active calls/speech, up to 1.0 FPS idle)
    */
   private applyActiveCallThrottling(): void {
-    if (!this.isScreenStreaming) return;
     const isUnderCallLoad = this.isVoiceCallActive || this.isAiSpeaking;
-    const targetFps = isUnderCallLoad ? 0.5 : this.screenFPS;
-    const intervalMs = Math.max(2000, Math.round(1000 / targetFps));
-    this.screenLoop.start(intervalMs);
+    const effectiveFps = isUnderCallLoad ? 0.5 : Math.max(0.5, Math.min(1.0, this.screenFPS));
+    const intervalMs = Math.max(1000, Math.round(1000 / effectiveFps));
+
+    if (this.isScreenStreaming) {
+      this.screenLoop.start(intervalMs);
+    }
+    if (this.isCameraStreaming) {
+      this.cameraLoop.start(intervalMs);
+    }
   }
 
   public setSocketRef(socketRef: { current: LiveSessionLike | null } | null): void {
@@ -128,36 +177,106 @@ export class VisionStreamService {
     this.frameDispatcher.setSocketRef(socketRef);
   }
 
-  public startScreenMonitoring({ fps = 0.5, region = null }: { fps?: number; region?: ScreenRegion | null } = {}): boolean {
+  /**
+   * Unified entry point for starting vision monitoring in any of the 4 selectable modes.
+   */
+  public async startVisionMonitoring(options: VisionMonitoringOptions = {}): Promise<boolean> {
+    if (this.disposed) return false;
+    const mode = options.mode || (options.region ? 'region' : (options.targetWindow || options.windowId ? 'window' : 'fullscreen'));
+    this.stopVisionMonitoring();
+
+    this.activeMode = mode;
+    this.isStreaming = true;
+
+    if (mode === 'camera') {
+      return await this.startCameraMonitoring({ fps: options.fps, deviceId: options.deviceId });
+    }
+
+    return this.startScreenMonitoring({
+      fps: options.fps,
+      region: mode === 'region' ? options.region : null,
+      displayId: options.displayId,
+      targetWindow: options.targetWindow,
+      windowId: options.windowId
+    });
+  }
+
+  public stopVisionMonitoring(): void {
+    this.isStreaming = false;
+    this.activeMode = null;
+    this.stopScreenMonitoring();
+    this.stopCameraMonitoring();
+  }
+
+  public startScreenMonitoring({
+    fps = 0.5,
+    region = null,
+    displayId = null,
+    targetWindow = null,
+    windowId = null
+  }: {
+    fps?: number;
+    region?: ScreenRegion | null;
+    displayId?: 'primary' | 'secondary' | string | number | null;
+    targetWindow?: string | null;
+    windowId?: string | null;
+  } = {}): boolean {
     if (this.disposed) return false;
     this.stopScreenMonitoring();
 
-    // Strict throttle to max 0.5 FPS during calls to eliminate GPU/audio contention
-    this.screenFPS = Math.max(0.1, Math.min(0.5, Number.isFinite(fps) ? fps : 0.5));
+    // Regulate sampling rate strictly between 0.5 FPS and 1.0 FPS
+    this.screenFPS = Math.max(0.5, Math.min(1.0, Number.isFinite(fps) ? fps : 0.5));
     this.screenRegion = region;
+    this.targetDisplayId = displayId;
+    this.targetWindow = targetWindow;
+    this.targetWindowId = windowId;
     this.isScreenStreaming = true;
 
-    const intervalMs = Math.max(2000, Math.round(1000 / this.screenFPS));
+    const intervalMs = this.isAiSpeaking || this.isVoiceCallActive
+      ? 2000
+      : Math.max(1000, Math.round(1000 / this.screenFPS));
+
     this.screenLoop.start(intervalMs);
-    eventBus.emit(EVENTS.CONFIG_CHANGED, { type: 'screen_monitoring_started', fps: this.screenFPS });
+    eventBus.emit(EVENTS.CONFIG_CHANGED, {
+      type: 'screen_monitoring_started',
+      fps: this.screenFPS,
+      region: this.screenRegion,
+      displayId: this.targetDisplayId,
+      targetWindow: this.targetWindow
+    });
     return true;
   }
 
   public stopScreenMonitoring(): void {
     this.isScreenStreaming = false;
     this.screenLoop.stop();
+    this.screenRegion = null;
+    this.targetDisplayId = null;
+    this.targetWindow = null;
+    this.targetWindowId = null;
     this.frameDispatcher.clearSource('screen');
     eventBus.emit(EVENTS.CONFIG_CHANGED, { type: 'screen_monitoring_stopped' });
+  }
+
+  private async captureCurrentScreenTarget(): Promise<string | null> {
+    const request: ScreenCaptureRequest = {
+      region: this.screenRegion,
+      displayId: this.targetDisplayId,
+      targetWindow: this.targetWindow,
+      windowId: this.targetWindowId,
+      fresh: false
+    };
+    return await this.captureScreenNative(request);
   }
 
   /**
    * Captures screen natively via Electron bridge.
    * Execution is offloaded to worker thread (screen.worker.ts) using transferable buffers.
    */
-  public async captureScreenNative(region: ScreenRegion | null = null): Promise<string | null> {
+  public async captureScreenNative(requestOrRegion: ScreenRegion | ScreenCaptureRequest | null = null): Promise<string | null> {
     try {
       if (electronBridge?.isElectron) {
-        return await electronBridge.captureScreenNative(region);
+        return await electronBridge.captureScreenNative(requestOrRegion);
       }
       return null;
     } catch (err) {
@@ -201,7 +320,8 @@ export class VisionStreamService {
       this.cameraStream = stream;
       this.videoElement = video;
       this.cameraCanvas = canvas;
-      this.cameraFPS = Math.max(0.2, Math.min(3.0, Number.isFinite(fps) ? fps : 0.5));
+      // Regulate camera sampling strictly between 0.5 and 1.0 FPS
+      this.cameraFPS = Math.max(0.5, Math.min(1.0, Number.isFinite(fps) ? fps : 0.5));
       this.isCameraStreaming = true;
 
       const tracks = stream.getVideoTracks();
@@ -210,7 +330,8 @@ export class VisionStreamService {
           if (this.cameraStream === stream) this.stopCameraMonitoring();
         };
       }
-      this.cameraLoop.start(Math.round(1000 / this.cameraFPS));
+      const intervalMs = this.isAiSpeaking || this.isVoiceCallActive ? 2000 : Math.round(1000 / this.cameraFPS);
+      this.cameraLoop.start(intervalMs);
       return true;
     } catch (error) {
       if (generation === this.cameraGeneration && !this.disposed) {
@@ -254,8 +375,7 @@ export class VisionStreamService {
     this.disposed = true;
     this.unsubAudioStart?.();
     this.unsubAudioEnd?.();
-    this.stopScreenMonitoring();
-    this.stopCameraMonitoring();
+    this.stopVisionMonitoring();
     this.frameDispatcher.destroy();
   }
 }

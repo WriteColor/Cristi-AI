@@ -33,6 +33,7 @@ import { soundFxService } from '../domain/audio/SoundFxService.js';
 import { AdaptiveTicker } from '../domain/live2d/AdaptiveTicker';
 import { useTelemetryStore } from '../stores/useTelemetryStore.js';
 import { useCompanionStore } from '../stores/useCompanionStore.js';
+import { useSettingsStore } from '../stores/useSettingsStore.js';
 
 // ── Global PIXI & Live2D Engine Setup ────────────────────────────────────────
 declare global {
@@ -105,8 +106,21 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
   const [isDragging, setIsDragging] = useState(false);
   const [modelReady, setModelReady] = useState(false); // controla visibilidad del hitTarget
 
+  // ── Dimensiones dedicadas del Canvas de Pixi.js (Mitigación radical de carga en Windows DWM) ──
+  const AVATAR_STAGE_WIDTH = 640;
+  const AVATAR_STAGE_HEIGHT = 920;
+
+  const [avatarPos, setAvatarPos] = useState<{ x: number; y: number }>(() => {
+    const initialX = typeof window !== 'undefined' ? Math.max(0, Math.round((window.innerWidth - 640) * 0.5)) : 300;
+    const initialY = typeof window !== 'undefined' ? Math.max(0, Math.round(window.innerHeight - 920)) : 100;
+    return { x: initialX, y: initialY };
+  });
+  const avatarPosRef = useRef(avatarPos);
+  avatarPosRef.current = avatarPos;
+
   // ── Sincronización de Estado de Actividad y Presupuesto ─────────────────────
   const isZenMode = useCompanionStore((s) => s.isZenMode);
+  const live2dVisible = useSettingsStore((s) => s.config.live2dVisible !== false);
   const [isWindowPaused, setIsWindowPaused] = useState(false);
   const [isDocHidden, setIsDocHidden] = useState(() => typeof document !== 'undefined' && document.hidden);
 
@@ -125,6 +139,7 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
   }, []);
 
   const isSuspended =
+    !live2dVisible ||
     isZenMode ||
     isWindowPaused ||
     isDocHidden ||
@@ -140,7 +155,6 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
   // ── Drag State & Persistent Position ───────────────────────────────────────
   const scaleRef = useRef(1.0);
   const baseScaleRef = useRef(1.0);
-  const customPositionRef = useRef<{ x: number; y: number } | null>(null);
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
 
@@ -173,31 +187,22 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
       const bounds = model.getBounds();
       if (!bounds || bounds.width < 10 || bounds.height < 10) return;
 
-      const screenW = app.screen.width || window.innerWidth;
-      const screenH = app.screen.height || window.innerHeight;
-
-      // Coordenadas CSS exactas
-      const cssX = Math.round(bounds.x);
-      const cssY = Math.round(bounds.y);
+      const pos = avatarPosRef.current;
+      const cssX = Math.round(pos.x + bounds.x);
+      const cssY = Math.round(pos.y + bounds.y);
       const cssW = Math.round(bounds.width);
       const cssH = Math.round(bounds.height);
 
-      // Clamp dentro de la pantalla
-      const clampedX = Math.max(0, cssX);
-      const clampedY = Math.max(0, cssY);
-      const clampedW = Math.min(cssW, screenW - clampedX);
-      const clampedH = Math.min(cssH, screenH - clampedY);
-
-      if (clampedW > 10 && clampedH > 10) {
-        hitEl.style.left = `${clampedX}px`;
-        hitEl.style.top = `${clampedY}px`;
-        hitEl.style.width = `${clampedW}px`;
-        hitEl.style.height = `${clampedH}px`;
+      if (cssW > 10 && cssH > 10) {
+        hitEl.style.left = `${cssX}px`;
+        hitEl.style.top = `${cssY}px`;
+        hitEl.style.width = `${cssW}px`;
+        hitEl.style.height = `${cssH}px`;
         clickThroughService.registerHitbox('live2d', {
-          x: clampedX,
-          y: clampedY,
-          width: clampedW,
-          height: clampedH
+          x: cssX,
+          y: cssY,
+          width: cssW,
+          height: cssH
         });
       }
     } catch (_) {}
@@ -206,31 +211,21 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
   // ── Layout & Framing ───────────────────────────────────────────────────────
   const applyLayout = useCallback((model: any, app: PIXI.Application, mode = viewModeRef.current) => {
     if (!model || !app?.screen) return;
-    const stageW = app.screen.width || window.innerWidth;
-    const stageH = app.screen.height || window.innerHeight;
+    const stageW = app.screen.width || AVATAR_STAGE_WIDTH;
+    const stageH = app.screen.height || AVATAR_STAGE_HEIGHT;
     const origH = model.internalModel?.originalHeight || 2000;
 
     let baseScale: number;
     if (mode === 'torso') {
       baseScale = (stageH * 1.55) / origH;
       model.scale.set(baseScale * scaleRef.current);
-      if (customPositionRef.current) {
-        model.x = customPositionRef.current.x;
-        model.y = customPositionRef.current.y;
-      } else {
-        model.x = (stageW - model.width) * 0.5;
-        model.y = stageH * 0.08;
-      }
+      model.x = (stageW - model.width) * 0.5;
+      model.y = stageH * 0.08;
     } else {
       baseScale = (stageH * 0.90) / origH;
       model.scale.set(baseScale * scaleRef.current);
-      if (customPositionRef.current) {
-        model.x = customPositionRef.current.x;
-        model.y = customPositionRef.current.y;
-      } else {
-        model.x = (stageW - model.width) * 0.5;
-        model.y = stageH * 0.05;
-      }
+      model.x = (stageW - model.width) * 0.5;
+      model.y = stageH * 0.05;
     }
     baseScaleRef.current = baseScale;
     syncHitTargetBounds();
@@ -239,10 +234,14 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
   // ── Inicialización del Motor Live2D ───────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current) return;
-    customPositionRef.current = null;
     setIsLoading(true); setLoadError(null); setModelReady(false);
-    const engine = new Live2DCanvasEngine({ container: containerRef.current, modelId,
-      applyLayout: (model, app) => applyLayout(model, app, viewModeRef.current), syncHitTargetBounds,
+    const engine = new Live2DCanvasEngine({
+      container: containerRef.current,
+      modelId,
+      width: AVATAR_STAGE_WIDTH,
+      height: AVATAR_STAGE_HEIGHT,
+      applyLayout: (model, app) => applyLayout(model, app, viewModeRef.current),
+      syncHitTargetBounds,
       onResources: current => {
         pixiAppRef.current = current.app; modelRef.current = current.model;
         adapterRef.current = current.adapter; controllerRef.current = current.controller;
@@ -321,11 +320,28 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
     return () => { unsubscribePause(); unsubscribeResume(); };
   }, [applyLayout, syncHitTargetBounds]);
 
+  useEffect(() => {
+    adaptiveTickerRef.current?.setLive2dVisible(live2dVisible);
+  }, [live2dVisible]);
+
   // ── Redimensionamiento ────────────────────────────────────────────────────
   useEffect(() => {
     const handleResize = () => {
+      if (typeof window !== 'undefined') {
+        const maxX = Math.max(0, window.innerWidth - AVATAR_STAGE_WIDTH);
+        const maxY = Math.max(0, window.innerHeight - AVATAR_STAGE_HEIGHT);
+        const clampedX = Math.min(avatarPosRef.current.x, maxX);
+        const clampedY = Math.min(avatarPosRef.current.y, maxY);
+        if (clampedX !== avatarPosRef.current.x || clampedY !== avatarPosRef.current.y) {
+          avatarPosRef.current = { x: clampedX, y: clampedY };
+          setAvatarPos({ x: clampedX, y: clampedY });
+          if (containerRef.current) {
+            containerRef.current.style.left = `${clampedX}px`;
+            containerRef.current.style.top = `${clampedY}px`;
+          }
+        }
+      }
       if (pixiAppRef.current && modelRef.current) {
-        pixiAppRef.current.renderer.resize(window.innerWidth, window.innerHeight);
         applyLayout(modelRef.current, pixiAppRef.current, viewModeRef.current);
         syncHitTargetBounds();
       }
@@ -342,14 +358,20 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
   }, [viewMode, applyLayout]);
 
   // ── Gestos y Emociones ────────────────────────────────────────────────────
+  const isThinking = useCompanionStore((s) => s.isThinking);
+
   useEffect(() => {
+    if (isThinking && controllerRef.current) {
+      controllerRef.current.setEmotion('thinking');
+      return;
+    }
     const raw = typeof gesture === 'string'
       ? gesture
       : (typeof gesture === 'object' && gesture !== null && 'emotion' in gesture
         ? (gesture as any).emotion
         : (gesture ? String(gesture) : 'idle'));
     if (controllerRef.current) controllerRef.current.setEmotion(raw);
-  }, [gesture]);
+  }, [gesture, isThinking]);
 
   // ── LipSync Reactivo ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -371,7 +393,7 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
 
   const handlePointerLeave = useCallback(() => {
     if (!dragRef.current.active) {
-      electronBridge?.setIgnoreMouseEvents(true, { forward: true });
+      electronBridge?.setIgnoreMouseEvents(true);
     }
   }, []);
 
@@ -381,16 +403,13 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
     adaptiveTickerRef.current?.setInteracting(true);
     if (e.button === 2) return; // Clic derecho → menú contextual
 
-    const model = modelRef.current;
-    if (!model) return;
-
     dragRef.current = {
       active: true,
       hasMoved: false,
       startX: e.clientX,
       startY: e.clientY,
-      modelStartX: model.x,
-      modelStartY: model.y
+      modelStartX: avatarPosRef.current.x,
+      modelStartY: avatarPosRef.current.y
     };
     setIsDragging(true);
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -398,7 +417,7 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     adaptiveTickerRef.current?.reportActivity('pointer_move');
-    if (!dragRef.current.active || !modelRef.current) return;
+    if (!dragRef.current.active) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
 
@@ -406,11 +425,13 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
       dragRef.current.hasMoved = true;
     }
 
-    const nextX = dragRef.current.modelStartX + dx;
-    const nextY = dragRef.current.modelStartY + dy;
-    modelRef.current.x = nextX;
-    modelRef.current.y = nextY;
-    customPositionRef.current = { x: nextX, y: nextY };
+    const nextX = Math.round(dragRef.current.modelStartX + dx);
+    const nextY = Math.round(dragRef.current.modelStartY + dy);
+    avatarPosRef.current = { x: nextX, y: nextY };
+    if (containerRef.current) {
+      containerRef.current.style.left = `${nextX}px`;
+      containerRef.current.style.top = `${nextY}px`;
+    }
 
     if (dragRafId.current === null) {
       dragRafId.current = requestAnimationFrame(() => {
@@ -426,6 +447,7 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
       cancelAnimationFrame(dragRafId.current);
       dragRafId.current = null;
     }
+    setAvatarPos(avatarPosRef.current);
     syncHitTargetBounds();
 
     if (!dragRef.current.active) return;
@@ -470,7 +492,18 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
   // ── API Pública (ref) ─────────────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
     reapplyLayout: () => {
-      customPositionRef.current = null;
+      if (typeof window !== 'undefined') {
+        const defaultPos = {
+          x: Math.max(0, Math.round((window.innerWidth - AVATAR_STAGE_WIDTH) * 0.5)),
+          y: Math.max(0, Math.round(window.innerHeight - AVATAR_STAGE_HEIGHT))
+        };
+        avatarPosRef.current = defaultPos;
+        setAvatarPos(defaultPos);
+        if (containerRef.current) {
+          containerRef.current.style.left = `${defaultPos.x}px`;
+          containerRef.current.style.top = `${defaultPos.y}px`;
+        }
+      }
       if (modelRef.current && pixiAppRef.current) {
         applyLayout(modelRef.current, pixiAppRef.current, viewModeRef.current);
       }
@@ -485,11 +518,16 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
       adaptiveTickerRef.current?.setExternalFpsCap(fps > 0 ? fps : null);
     },
     moveTo: (pos: any) => {
-      if (!modelRef.current) return;
-      if (typeof pos?.x === 'number') modelRef.current.x = pos.x;
-      if (typeof pos?.y === 'number') modelRef.current.y = pos.y;
-      customPositionRef.current = { x: modelRef.current.x, y: modelRef.current.y };
-      syncHitTargetBounds();
+      if (typeof pos?.x === 'number' && typeof pos?.y === 'number') {
+        const nextPos = { x: Math.round(pos.x), y: Math.round(pos.y) };
+        avatarPosRef.current = nextPos;
+        setAvatarPos(nextPos);
+        if (containerRef.current) {
+          containerRef.current.style.left = `${nextPos.x}px`;
+          containerRef.current.style.top = `${nextPos.y}px`;
+        }
+        syncHitTargetBounds();
+      }
     }
   }));
 
@@ -502,11 +540,17 @@ export const Live2DCanvas = React.memo(forwardRef<Live2DCanvasRef, Live2DCanvasP
       className="relative w-full h-full select-none overflow-hidden"
       style={{ pointerEvents: 'none' }}
     >
-      {/* Canvas WebGL — pointer-events: none (solo renderiza visualmente) */}
+      {/* Canvas WebGL — limitado estrictamente a las dimensiones del avatar */}
       <div
         ref={containerRef}
-        className="absolute inset-0"
-        style={{ pointerEvents: 'none' }}
+        style={{
+          position: 'absolute',
+          left: `${avatarPos.x}px`,
+          top: `${avatarPos.y}px`,
+          width: `${AVATAR_STAGE_WIDTH}px`,
+          height: `${AVATAR_STAGE_HEIGHT}px`,
+          pointerEvents: 'none'
+        }}
       />
 
       {/*

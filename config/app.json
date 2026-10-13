@@ -5,8 +5,8 @@
   "voiceVolume": 100,
   "workspacePath": "C:\\React-Nextjs-Projects",
   "avatarViewMode": "full",
-  "live2dVisible": true,
-  "live2dModelId": "jane_doe",
+  "live2dVisible": false,
+  "live2dModelId": "yanderegirl",
   "zenMode": false,
   "logLevel": "info",
   "allowedFolders": {
@@ -17,7 +17,9 @@
     "videos": true,
     "music": true
   },
-  "customAllowedPaths": [],
+  "customAllowedPaths": [
+    "C:\\"
+  ],
   "modelId": "gemini-2.5-flash-native-audio-preview-12-2025",
   "voiceName": "Despina"
 }

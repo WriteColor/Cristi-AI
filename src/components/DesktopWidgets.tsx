@@ -10,7 +10,9 @@ import {
   Play,
   Pause,
   SkipBack,
-  SkipForward
+  SkipForward,
+  Terminal,
+  ShieldCheck
 } from 'lucide-react';
 import { eventBus, EVENTS } from '../infrastructure/events/eventBus.js';
 import { proactiveScheduler } from '../domain/interaction/ProactiveScheduler.js';
@@ -47,6 +49,8 @@ interface WindowsMediaStatus {
 export const DesktopWidgets: React.FC<DesktopWidgetsProps> = React.memo(function DesktopWidgets(props = {}) {
   const storeVisible = useWidgetStore((s) => s.showWidgets);
   const isUiVisible = useCompanionStore((s) => s.isUiVisible && !s.isZenMode);
+  const isOsOperating = useCompanionStore((s) => s.isOsOperating);
+  const osOperationDetails = useCompanionStore((s) => s.osOperationDetails);
   const isVisible = props.isVisible !== undefined ? props.isVisible : (storeVisible && isUiVisible);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -219,7 +223,7 @@ export const DesktopWidgets: React.FC<DesktopWidgetsProps> = React.memo(function
   };
 
   const isMediaActive = Boolean(mediaStatus?.isPlaying && (mediaStatus.title || mediaStatus.trackInfo));
-  const hasContent = widgets.length > 0 || isMediaActive;
+  const hasContent = widgets.length > 0 || isMediaActive || isOsOperating;
 
   // Only render if there are authentic active widgets and isVisible is true
   if (!isVisible || !hasContent) return null;
@@ -230,6 +234,31 @@ export const DesktopWidgets: React.FC<DesktopWidgetsProps> = React.memo(function
       className="cristi-widgets-viewport zen-fadeable-ui pointer-events-auto select-none"
       {...interactiveProps}
     >
+      {/* 0. Live OS Control & Critical Windows Protection Widget */}
+      {isOsOperating && (
+        <div className="cristi-widget-card border-amber-800/80 bg-zinc-950/95 shadow-2xl animate-pulse">
+          <div className="cristi-widget-icon-box text-amber-400 bg-amber-950/40 border-amber-800/60">
+            <Terminal size={13} className="animate-pulse" />
+          </div>
+
+          <div className="cristi-widget-info">
+            <div className="cristi-widget-header">
+              <span className="cristi-widget-title text-amber-200">
+                Operación OS en Curso (C:\)
+              </span>
+              <span className="cristi-widget-badge text-[9px] px-1.5 py-0.2 bg-emerald-950/80 border border-emerald-800 text-emerald-300 flex items-center gap-1">
+                <ShieldCheck size={9} className="text-emerald-400" />
+                Protección Activa
+              </span>
+            </div>
+
+            <p className="cristi-widget-desc truncate max-w-[200px] text-zinc-300 text-[11px] font-mono">
+              {osOperationDetails || 'Ejecutando comando seguro en el sistema...'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* 1. Live Windows & Spotify Media Widget */}
       {isMediaActive && mediaStatus && (
         <div className="cristi-widget-card cristi-media-widget border-emerald-900/60 bg-zinc-950/95 shadow-2xl">

@@ -30,9 +30,11 @@ export class LiveSessionSupervisor {
     this.attempts = this.attempts.filter(time => now - time < 120000);
     if (this.attempts.length >= this.maxAttempts) return null;
 
-    // Exponential backoff: 1s, 2s, 4s, capped at strict max 8s (8000ms) with jitter
-    const maxBackoff = Math.min(8000, 1000 * 2 ** this.attempts.length);
-    const delay = Math.floor(this.random() * maxBackoff);
+    // Exponential backoff: 1s, 2s, 4s, capped at strict max 8s (8000ms) with +/- 25% jitter
+    const base = Math.min(8000, 1000 * Math.pow(2, this.attempts.length));
+    const jitterRange = base * 0.25;
+    const jitter = (this.random() * 2 - 1) * jitterRange;
+    const delay = Math.max(1000, Math.min(8000, Math.round(base + jitter)));
     this.attempts.push(now);
     return delay;
   }

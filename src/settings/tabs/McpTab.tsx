@@ -18,11 +18,17 @@ import {
   AlertTriangle,
   Globe,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  Shield,
+  ShieldCheck,
+  Zap
 } from 'lucide-react';
 import { mcpClientManager, type McpServerConfig, type McpToolDeclaration } from '../../domain/integrations/mcp/MCPClientManager.js';
 import { soundFxService } from '../../domain/audio/SoundFxService.js';
 import { toastService } from '../../infrastructure/notifications/toastService.js';
+import { spotifyMcpServer } from '../../mcp/servers/spotify/SpotifyMcpServer.js';
+import { playwrightMcpServer } from '../../mcp/servers/playwright/PlaywrightMcpServer.js';
+import { getLiveToolsConfig } from '../../config/tools.js';
 
 interface ToolTestState {
   serverId: string;
@@ -77,10 +83,42 @@ export const McpTab: React.FC = () => {
     refreshMcpServers();
   }, [refreshMcpServers]);
 
+  // Native Armored Servers (Immune to accidental deletion)
+  const nativeServers = [
+    {
+      id: 'cristi_spotify',
+      name: 'Spotify Cristi MCP',
+      description: 'Control de reproducción Spotify (Web API + Windows SMTC) y sincronización emocional con Live2D.',
+      health: 'HEALTHY' as const,
+      tools: spotifyMcpServer.getToolsDeclarations().map((t) => ({
+        name: t.name,
+        originalName: t.name,
+        description: t.description,
+        parameters: t.parameters
+      }))
+    },
+    {
+      id: 'cristi_playwright',
+      name: 'Playwright Brave MCP',
+      description: 'Automatización de navegación web en Brave Browser y reproducción garantizada de YouTube.',
+      health: 'HEALTHY' as const,
+      tools: playwrightMcpServer.getToolsDeclarations().map((t) => ({
+        name: t.name,
+        originalName: t.name,
+        description: t.description,
+        parameters: t.parameters
+      }))
+    }
+  ];
+
+  const dynamicServers = mcpServers.filter((s) => s.id !== 'cristi_spotify' && s.id !== 'cristi_playwright' && s.type !== 'internal');
+  const liveToolsConfig = getLiveToolsConfig();
+  const totalLiveExportedFunctions = liveToolsConfig[0]?.functionDeclarations?.length || 0;
+
   // Statistics calculation
-  const totalServers = mcpServers.length;
-  const connectedServers = mcpServers.filter((s) => s.status === 'connected').length;
-  const totalActiveTools = mcpServers.reduce((acc, s) => acc + (s.status === 'connected' ? (s.tools?.length || 0) : 0), 0);
+  const totalServers = nativeServers.length + dynamicServers.length;
+  const connectedServers = nativeServers.length + dynamicServers.filter((s) => s.status === 'connected').length;
+  const totalActiveTools = nativeServers.reduce((acc, s) => acc + s.tools.length, 0) + dynamicServers.reduce((acc, s) => acc + (s.status === 'connected' ? (s.tools?.length || 0) : 0), 0);
 
   // Server Actions
   const handleConnectServer = async (id: string) => {
@@ -242,11 +280,18 @@ export const McpTab: React.FC = () => {
     setToolTest((prev) => prev ? { ...prev, isRunning: true, error: null, result: null } : null);
 
     try {
-      const res = await mcpClientManager.callServerTool(
-        toolTest.serverId,
-        toolTest.tool.originalName || toolTest.tool.name,
-        parsedArgs
-      );
+      let res: unknown;
+      if (toolTest.serverId === 'cristi_spotify') {
+        res = await spotifyMcpServer.executeTool(toolTest.tool.originalName || toolTest.tool.name, parsedArgs);
+      } else if (toolTest.serverId === 'cristi_playwright') {
+        res = await playwrightMcpServer.executeTool(toolTest.tool.originalName || toolTest.tool.name, parsedArgs);
+      } else {
+        res = await mcpClientManager.callServerTool(
+          toolTest.serverId,
+          toolTest.tool.originalName || toolTest.tool.name,
+          parsedArgs
+        );
+      }
       setToolTest((prev) => prev ? { ...prev, isRunning: false, result: res } : null);
       toastService.success('MCP Tester', 'Herramienta ejecutada.');
     } catch (err) {
@@ -379,23 +424,30 @@ export const McpTab: React.FC = () => {
         </div>
 
         {/* Status Metrics Bar */}
-        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-800/80 text-xs font-mono">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-zinc-800/80 text-xs font-mono">
           <div className="bg-zinc-950/70 p-2 rounded-sm border border-zinc-800 flex items-center justify-between">
-            <span className="text-zinc-400">Total Configurados:</span>
-            <span className="font-semibold text-zinc-200">{totalServers}</span>
+            <span className="text-zinc-400">Nativos Blindados:</span>
+            <span className="font-semibold text-emerald-400 flex items-center gap-1">
+              <ShieldCheck size={12} className="text-emerald-400" />
+              {nativeServers.length}
+            </span>
+          </div>
+          <div className="bg-zinc-950/70 p-2 rounded-sm border border-zinc-800 flex items-center justify-between">
+            <span className="text-zinc-400">Dinámicos (JSON):</span>
+            <span className="font-semibold text-zinc-200">{dynamicServers.length}</span>
+          </div>
+          <div className="bg-zinc-950/70 p-2 rounded-sm border border-zinc-800 flex items-center justify-between">
+            <span className="text-zinc-400">Gemini Live Tools:</span>
+            <span className="font-semibold text-purple-400 flex items-center gap-1" title="Funciones exportadas a la sesión Gemini Live">
+              <Zap size={11} className="text-purple-400" />
+              {totalLiveExportedFunctions}
+            </span>
           </div>
           <div className="bg-zinc-950/70 p-2 rounded-sm border border-zinc-800 flex items-center justify-between">
             <span className="text-zinc-400">Conectados:</span>
             <span className="font-semibold text-emerald-400 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              {connectedServers}
-            </span>
-          </div>
-          <div className="bg-zinc-950/70 p-2 rounded-sm border border-zinc-800 flex items-center justify-between">
-            <span className="text-zinc-400">Herramientas Activas:</span>
-            <span className="font-semibold text-purple-400 flex items-center gap-1">
-              <Wrench size={11} />
-              {totalActiveTools}
+              {connectedServers}/{totalServers}
             </span>
           </div>
         </div>
@@ -514,19 +566,175 @@ export const McpTab: React.FC = () => {
         </div>
       )}
 
-      {/* Lista de Servidores MCP */}
+      {/* ── SECCIÓN 1: INTEGRACIONES NATIVAS BLINDADAS ─────────── */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between text-xs font-mono text-zinc-400 px-1">
-          <span>Servidores Registrados ({mcpServers.length})</span>
-          <span>Acciones & Explorador</span>
+        <div className="flex items-center justify-between text-xs font-mono text-zinc-300 px-1 border-b border-zinc-800/80 pb-2">
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={14} className="text-emerald-400" />
+            <span className="font-semibold uppercase tracking-wider text-zinc-200">
+              Integraciones Nativas Blindadas ({nativeServers.length})
+            </span>
+          </div>
+          <span className="text-[11px] text-zinc-500 font-mono">
+            Protegidas por el Núcleo • Sin Riesgo de Eliminación
+          </span>
         </div>
 
-        {mcpServers.map((server) => {
+        {nativeServers.map((server) => {
+          const isExpanded = expandedServerId === server.id;
+          const tools = server.tools;
+
+          return (
+            <div
+              key={server.id}
+              className="border border-emerald-900/40 bg-zinc-900/60 rounded-sm p-3.5 space-y-3 transition-colors shadow-sm"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <Shield size={14} className="text-emerald-400 shrink-0" />
+                  <span className="font-semibold text-xs font-mono text-zinc-100 truncate">
+                    {server.name}
+                  </span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-800/80 rounded-none uppercase">
+                    Blindado (Nativo)
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-none border border-emerald-700/80 bg-emerald-950/80 text-emerald-300 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    HEALTHY
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[10px] font-mono px-2 py-0.5 bg-zinc-950 text-zinc-400 border border-zinc-800 rounded-none">
+                    Permanente
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-[11px] font-mono text-zinc-400 bg-zinc-950/70 px-2.5 py-1.5 rounded-sm border border-zinc-800/80">
+                {server.description}
+              </p>
+
+              {/* Tool catalogue toggle */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundFxService.playClick();
+                    setExpandedServerId(isExpanded ? null : server.id);
+                  }}
+                  className="w-full flex items-center justify-between text-[11px] font-mono px-2.5 py-1.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 rounded-sm text-zinc-300 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Wrench size={11} className="text-emerald-400" />
+                    <span className="font-semibold">
+                      {tools.length} funciones nativas registradas
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 text-[10px] text-zinc-400">
+                    <span>{isExpanded ? 'Ocultar catálogo' : 'Explorar y probar'}</span>
+                    {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div className="mt-2 space-y-2 pl-1 animate-in fade-in duration-100">
+                    {tools.map((tool, idx) => {
+                      const rawParams = (tool.parameters || {}) as {
+                        properties?: Record<string, { type?: string; description?: string }>;
+                        required?: string[];
+                      };
+                      const properties = rawParams.properties || {};
+                      const requiredList = rawParams.required || [];
+
+                      return (
+                        <div
+                          key={idx}
+                          className="bg-zinc-950 border border-zinc-800 rounded-sm p-2.5 space-y-2 text-xs font-mono"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="font-semibold text-emerald-300 flex items-center gap-1.5">
+                                <Wrench size={11} className="text-emerald-400" />
+                                <span>{tool.name}</span>
+                              </div>
+                              {tool.description && (
+                                <p className="text-[11px] text-zinc-400 mt-0.5">
+                                  {tool.description}
+                                </p>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleOpenToolTester(server.id, tool as any)}
+                              className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-mono bg-emerald-950/80 hover:bg-emerald-900 text-emerald-200 border border-emerald-700 rounded-xs transition-colors shrink-0 cursor-pointer"
+                            >
+                              <Play size={9} /> Probar
+                            </button>
+                          </div>
+
+                          {Object.keys(properties).length > 0 ? (
+                            <div className="bg-zinc-900/60 p-2 rounded-xs border border-zinc-800/80 space-y-1">
+                              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-semibold">
+                                Parámetros:
+                              </span>
+                              <div className="space-y-1">
+                                {Object.entries(properties).map(([propName, propDef]) => (
+                                  <div key={propName} className="text-[11px] flex items-baseline gap-1.5 flex-wrap">
+                                    <span className="text-zinc-200 font-semibold">{propName}</span>
+                                    <span className="text-[10px] px-1 bg-zinc-800 text-zinc-400 rounded-xs">
+                                      {String(propDef?.type || 'string').toUpperCase()}
+                                    </span>
+                                    {requiredList.includes(propName) && (
+                                      <span className="text-[9px] px-1 bg-rose-950 text-rose-300 border border-rose-800 rounded-xs font-semibold">
+                                        Requerido
+                                      </span>
+                                    )}
+                                    {propDef?.description && (
+                                      <span className="text-zinc-500 text-[10px]">
+                                        — {propDef.description}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-zinc-500 italic block">
+                              No requiere parámetros.
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── SECCIÓN 2: SERVIDORES MCP DINÁMICOS ─────────────────── */}
+      <div className="space-y-3 pt-2">
+        <div className="flex items-center justify-between text-xs font-mono text-zinc-300 px-1 border-b border-zinc-800/80 pb-2">
+          <div className="flex items-center gap-2">
+            <Server size={14} className="text-purple-400" />
+            <span className="font-semibold uppercase tracking-wider text-zinc-200">
+              Servidores MCP Dinámicos ({dynamicServers.length})
+            </span>
+          </div>
+          <span className="text-[11px] text-zinc-500 font-mono">
+            config/mcp.json • stdio / SSE
+          </span>
+        </div>
+
+        {dynamicServers.map((server) => {
           const isExpanded = expandedServerId === server.id;
           const tools = Array.isArray(server.tools) ? server.tools : [];
           const isConnecting = connectingServerId === server.id || server.status === 'connecting';
 
-          // Status badges
           let statusBadgeClass = 'bg-zinc-800 text-zinc-400 border-zinc-700';
           let statusLabel = 'Desconectado';
           if (server.status === 'connected') {
@@ -547,7 +755,6 @@ export const McpTab: React.FC = () => {
                 server.enabled ? 'border-zinc-800 hover:border-zinc-700' : 'border-zinc-800/60 opacity-60'
               }`}
             >
-              {/* Server Title and Controls Row */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2 min-w-0 flex-wrap">
                   <Server size={14} className="text-purple-400 shrink-0" />
@@ -568,12 +775,11 @@ export const McpTab: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  {/* Conectar / Desconectar Button */}
                   {server.status === 'connected' ? (
                     <button
                       type="button"
                       onClick={() => handleDisconnectServer(server.id)}
-                      className="px-2.5 py-1 text-[11px] font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-sm transition-colors"
+                      className="px-2.5 py-1 text-[11px] font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-sm transition-colors cursor-pointer"
                     >
                       Desconectar
                     </button>
@@ -582,18 +788,17 @@ export const McpTab: React.FC = () => {
                       type="button"
                       disabled={isConnecting || !server.enabled}
                       onClick={() => handleConnectServer(server.id)}
-                      className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-mono bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-800 rounded-sm transition-colors disabled:opacity-50"
+                      className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-mono bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-800 rounded-sm transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       {isConnecting && <Loader2 size={11} className="animate-spin" />}
                       <span>Conectar</span>
                     </button>
                   )}
 
-                  {/* Toggle Enabled / Disabled */}
                   <button
                     type="button"
                     onClick={() => handleToggleServer(server.id, !server.enabled)}
-                    className={`px-2 py-1 text-[11px] font-mono rounded-sm border transition-colors flex items-center gap-1 ${
+                    className={`px-2 py-1 text-[11px] font-mono rounded-sm border transition-colors flex items-center gap-1 cursor-pointer ${
                       server.enabled
                         ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-750'
                         : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300'
@@ -604,11 +809,10 @@ export const McpTab: React.FC = () => {
                     <span>{server.enabled ? 'Activo' : 'Inactivo'}</span>
                   </button>
 
-                  {/* Delete Server */}
                   <button
                     type="button"
                     onClick={() => handleRemoveServer(server.id, server.name)}
-                    className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors rounded-sm hover:bg-zinc-800/50"
+                    className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors rounded-sm hover:bg-zinc-800/50 cursor-pointer"
                     title="Eliminar servidor permanentemente"
                   >
                     <Trash2 size={13} />
@@ -616,7 +820,6 @@ export const McpTab: React.FC = () => {
                 </div>
               </div>
 
-              {/* Server Command or URL Path */}
               <div className="text-[11px] font-mono text-zinc-400 truncate bg-zinc-950/80 px-2.5 py-1.5 rounded-sm border border-zinc-800">
                 {server.type === 'sse' ? (
                   <span className="flex items-center gap-1.5">
@@ -634,7 +837,6 @@ export const McpTab: React.FC = () => {
                 )}
               </div>
 
-              {/* Error Message Callout */}
               {server.lastError && (
                 <div className="bg-rose-950/40 border border-rose-800/70 text-rose-300 p-2.5 rounded-sm text-xs font-mono flex items-start gap-2">
                   <AlertTriangle size={14} className="shrink-0 mt-0.5 text-rose-400" />
@@ -642,7 +844,6 @@ export const McpTab: React.FC = () => {
                 </div>
               )}
 
-              {/* Collapsible Tools Header Toggle */}
               {tools.length > 0 && (
                 <div className="pt-1">
                   <button
@@ -651,7 +852,7 @@ export const McpTab: React.FC = () => {
                       soundFxService.playClick();
                       setExpandedServerId(isExpanded ? null : server.id);
                     }}
-                    className="w-full flex items-center justify-between text-[11px] font-mono px-2.5 py-1.5 bg-purple-950/30 hover:bg-purple-950/50 border border-purple-800/50 rounded-sm text-purple-200 transition-colors"
+                    className="w-full flex items-center justify-between text-[11px] font-mono px-2.5 py-1.5 bg-purple-950/30 hover:bg-purple-950/50 border border-purple-800/50 rounded-sm text-purple-200 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-1.5">
                       <Wrench size={11} className="text-purple-400" />
@@ -665,7 +866,6 @@ export const McpTab: React.FC = () => {
                     </div>
                   </button>
 
-                  {/* Collapsible Tool Explorer */}
                   {isExpanded && (
                     <div className="mt-2 space-y-2 pl-1 animate-in fade-in duration-100">
                       {tools.map((tool, idx) => {
@@ -697,13 +897,12 @@ export const McpTab: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleOpenToolTester(server.id, tool)}
-                                className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-700 rounded-xs transition-colors shrink-0"
+                                className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-700 rounded-xs transition-colors shrink-0 cursor-pointer"
                               >
                                 <Play size={9} /> Probar
                               </button>
                             </div>
 
-                            {/* Parameters Schema Breakdown */}
                             {Object.keys(properties).length > 0 ? (
                               <div className="bg-zinc-900/60 p-2 rounded-xs border border-zinc-800/80 space-y-1">
                                 <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-semibold">
@@ -749,21 +948,21 @@ export const McpTab: React.FC = () => {
           );
         })}
 
-        {mcpServers.length === 0 && (
-          <div className="text-center py-10 border border-dashed border-zinc-800 rounded-sm space-y-2">
-            <Server size={24} className="mx-auto text-zinc-600" />
+        {dynamicServers.length === 0 && (
+          <div className="text-center py-8 border border-dashed border-zinc-800 rounded-sm space-y-2">
+            <Server size={22} className="mx-auto text-zinc-600" />
             <p className="text-xs text-zinc-400 font-mono">
-              No hay servidores MCP configurados actualmente.
+              No hay servidores MCP dinámicos externos configurados actualmente.
             </p>
             <p className="text-[11px] text-zinc-500 max-w-sm mx-auto font-sans">
-              Añade un servidor local stdio o remoto SSE para federar herramientas estándar en Gemini Live.
+              Registra un servidor local stdio o remoto SSE para extender las herramientas de Cristi AI.
             </p>
             <button
               type="button"
               onClick={() => setShowAddForm(true)}
-              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono bg-purple-700 hover:bg-purple-600 text-white rounded-sm"
+              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono bg-purple-700 hover:bg-purple-600 text-white rounded-sm cursor-pointer"
             >
-              <Plus size={12} /> Registrar Primer Servidor
+              <Plus size={12} /> Registrar Servidor Dinámico
             </button>
           </div>
         )}

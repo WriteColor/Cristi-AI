@@ -21,9 +21,12 @@ import {
   FileText,
   Image,
   Film,
-  Music
+  Music,
+  AppWindow,
+  RefreshCw
 } from 'lucide-react';
 import { useSettingsStore } from '@/stores/useSettingsStore';
+import { useVisionStore } from '../../stores/useVisionStore.js';
 import type { AllowedFoldersConfig } from '@/types';
 import { GEMINI_MODELS_LIST, SYSTEM_PERSONA_PROMPT } from '../../config/models.js';
 import { soundFxService } from '../../domain/audio/SoundFxService.js';
@@ -59,10 +62,18 @@ export const GeneralTab: React.FC = () => {
   const addCustomAllowedPath = useSettingsStore(s => s.addCustomAllowedPath);
   const removeCustomAllowedPath = useSettingsStore(s => s.removeCustomAllowedPath);
 
+  // Vision store state and actions for capturable windows
+  const availableWindows = useVisionStore(s => s.availableWindows);
+  const targetWindowId = useVisionStore(s => s.targetWindowId);
+  const setTargetWindow = useVisionStore(s => s.setTargetWindow);
+  const setCaptureMode = useVisionStore(s => s.setCaptureMode);
+  const refreshSources = useVisionStore(s => s.refreshSources);
+
   const [systemFoldersPaths, setSystemFoldersPaths] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let isMounted = true;
+    refreshSources().catch(() => {});
     if (electronBridge && typeof electronBridge.getSystemFolders === 'function') {
       electronBridge.getSystemFolders()
         .then((folders: Record<string, string>) => {
@@ -77,7 +88,7 @@ export const GeneralTab: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [refreshSources]);
 
   const handleSelectWorkspace = async () => {
     soundFxService.playClick();
@@ -350,10 +361,30 @@ export const GeneralTab: React.FC = () => {
           >
             {GEMINI_MODELS_LIST.map((m: any) => (
               <option key={m.id} value={m.id}>
-                {m.displayName || m.name} ({m.id})
+                {m.name || m.displayName} — {m.badge || m.latency}
               </option>
             ))}
           </select>
+          {modelId === 'gemini-3.8-live-extended-thinking' && (
+            <p className="text-[10px] text-violet-400 font-mono mt-1 flex items-center gap-1">
+              <Sparkles size={11} /> Razonamiento extendido con pensamientos audibles e internos.
+            </p>
+          )}
+          {modelId === 'gemini-3.8-live' && (
+            <p className="text-[10px] text-emerald-400 font-mono mt-1">
+              ⚡ Ultra baja latencia SOTA con streaming directo y VAD de alta sensibilidad.
+            </p>
+          )}
+          {modelId === 'gemini-3.1-flash-live-preview' && (
+            <p className="text-[10px] text-sky-400 font-mono mt-1">
+              Estándar multimodal con transcripción bidireccional y clarificación activa.
+            </p>
+          )}
+          {modelId === 'gemini-2.5-flash-native-audio-preview-12-2025' && (
+            <p className="text-[10px] text-zinc-400 font-mono mt-1">
+              Edición de audio nativo con prompt anti-conjetura reforzado.
+            </p>
+          )}
         </div>
 
         {/* Temperatura */}
@@ -417,6 +448,91 @@ export const GeneralTab: React.FC = () => {
             Reconocimiento Objetos (Alto)
           </label>
         </div>
+      </div>
+
+      {/* Aplicaciones Capturables para Compartir Pantalla */}
+      <div className="flex flex-col gap-3 border border-zinc-800 bg-zinc-900/40 p-4 rounded-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AppWindow size={15} className="text-cyan-400" />
+            <h3 className="text-xs font-mono font-semibold text-zinc-100 uppercase tracking-wide">
+              Aplicaciones Capturables para Compartir Pantalla
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              soundFxService.playClick();
+              await refreshSources();
+              toastService.info('Ventanas actualizadas', 'Lista de aplicaciones recargada');
+            }}
+            className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-1 rounded bg-zinc-950 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+          >
+            <RefreshCw size={11} />
+            <span>Refrescar ventanas</span>
+          </button>
+        </div>
+
+        <p className="text-[11px] text-zinc-400">
+          Selecciona una aplicación abierta en tu sistema para enfocar la visión de Cristi exclusivamente en esa ventana.
+        </p>
+
+        {availableWindows.length === 0 ? (
+          <div className="p-3 text-center border border-dashed border-zinc-800 rounded bg-zinc-950/30 text-zinc-500 text-[11px] font-mono">
+            No se detectaron ventanas capturables abiertas o están minimizadas. Haz clic en "Refrescar ventanas" para escanear de nuevo.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-60 overflow-y-auto pr-1">
+            {availableWindows.map((win) => {
+              const isSelected = targetWindowId === win.id;
+              return (
+                <button
+                  key={win.id}
+                  type="button"
+                  onClick={() => {
+                    soundFxService.playClick();
+                    if (isSelected) {
+                      setTargetWindow(null, null);
+                      toastService.info('Modo ventana cancelado', 'Volviendo a pantalla completa');
+                    } else {
+                      setTargetWindow(win.id, win.title);
+                      setCaptureMode('window');
+                      toastService.info('Ventana enfocada', win.title);
+                    }
+                  }}
+                  className={`flex items-center gap-2.5 p-2 rounded text-left transition-all border cursor-pointer ${
+                    isSelected
+                      ? 'bg-cyan-950/40 border-cyan-700/60 text-cyan-200 shadow-[0_0_10px_rgba(6,182,212,0.15)]'
+                      : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-900/60 text-zinc-300'
+                  }`}
+                >
+                  {win.thumbnail ? (
+                    <img
+                      src={win.thumbnail}
+                      alt={win.title}
+                      className="w-7 h-7 rounded shrink-0 object-contain bg-zinc-900 border border-zinc-800 p-0.5"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded shrink-0 bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500">
+                      <AppWindow size={14} />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[11px] font-mono font-medium block truncate" title={win.title}>
+                      {win.title}
+                    </span>
+                    <span className="text-[9px] font-mono text-zinc-500 block truncate">
+                      {win.id}
+                    </span>
+                  </div>
+                  {isSelected && (
+                    <CheckCircle2 size={13} className="text-cyan-400 shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Único Prompt Maestro del Sistema (Totalmente Customizable y Persistente) */}

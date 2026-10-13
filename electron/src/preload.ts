@@ -37,6 +37,7 @@ export const electronBridgeApi: ElectronApiBridge = {
     ipcRenderer.send(IPC_CHANNELS.SET_ALWAYS_ON_TOP, Boolean(value));
   },
   getAlwaysOnTop: () => ipcRenderer.invoke(IPC_CHANNELS.GET_ALWAYS_ON_TOP),
+  listCapturableWindows: () => ipcRenderer.invoke('get-capturable-windows'),
   minimizeWindow: () => ipcRenderer.send(IPC_CHANNELS.MINIMIZE_WINDOW),
   showWindow: () => ipcRenderer.send('show-window'),
   hideWindow: () => ipcRenderer.send('hide-window'),

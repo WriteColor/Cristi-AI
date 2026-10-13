@@ -32,34 +32,43 @@ const PROTECTED_SYSTEM_FILES = new Set([
   'ntldr',
 ]);
 
-// Protege archivos y carpetas esenciales del sistema Windows contra borrado accidental
-export function isPathProtectedFromDeletion(candidatePath: string): boolean {
+/**
+ * Protege archivos y directorios esenciales de Windows contra borrado, sobreescritura o alteración
+ */
+export function isPathProtectedFromModification(candidatePath: string): boolean {
   if (!candidatePath || typeof candidatePath !== 'string') return true;
   const normalized = path.resolve(candidatePath).toLowerCase();
 
-  // No permitir borrar raíces de unidad (C:\, D:\)
+  // No permitir alterar raíces de unidad completas (C:\, D:\)
   const parsed = path.parse(normalized);
   if (normalized === parsed.root.toLowerCase() || normalized === parsed.root.toLowerCase().replace(/[\\/]+$/, '')) {
     return true;
   }
 
-  // No permitir borrar carpetas críticas del sistema (Windows, System32, etc.)
+  // No permitir alterar carpetas críticas del sistema (Windows, System32, WinSxS, Boot, EFI, etc.)
   for (const sysDir of PROTECTED_SYSTEM_DIRECTORIES) {
     if (normalized === sysDir || normalized.startsWith(sysDir + path.sep)) {
       return true;
     }
   }
 
-  // No permitir borrar archivos de paginación o arranque en la raíz
+  // Protección específica para subdirectorios System32 y WinSxS
+  if (normalized.includes('\\windows\\system32') || normalized.includes('\\windows\\winsxs') || normalized.includes('\\windows\\syswow64')) {
+    return true;
+  }
+
+  // No permitir alterar archivos de paginación o arranque
   const baseName = path.basename(normalized);
   if (PROTECTED_SYSTEM_FILES.has(baseName)) {
-    const parentDir = path.dirname(normalized);
-    if (parentDir === parsed.root.toLowerCase() || parentDir === parsed.root.toLowerCase().replace(/[\\/]+$/, '')) {
-      return true;
-    }
+    return true;
   }
 
   return false;
+}
+
+// Protege archivos y carpetas esenciales del sistema Windows contra borrado accidental
+export function isPathProtectedFromDeletion(candidatePath: string): boolean {
+  return isPathProtectedFromModification(candidatePath);
 }
 
 export function validateRelativePath(value: unknown): string {

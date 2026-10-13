@@ -29,7 +29,10 @@ import {
   Smartphone,
   Headphones,
   Save,
-  Link2
+  Link2,
+  ShieldAlert,
+  Star,
+  Sliders
 } from 'lucide-react';
 import { windowsMediaService } from '../../domain/media/WindowsMediaService.js';
 import { soundFxService } from '../../domain/audio/SoundFxService.js';
@@ -60,15 +63,31 @@ export const WindowsMediaTab: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isExecutingAction, setIsExecutingAction] = useState(false);
   const [enableLive2dReactions, setEnableLive2dReactions] = useState(true);
+  const [requireExplicitConfirmation, setRequireExplicitConfirmation] = useState(true);
 
   // Spotify OAuth & Developer Credentials State
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [redirectUri, setRedirectUri] = useState('http://127.0.0.1:8888/callback');
+  const [preferredDevice, setPreferredDevice] = useState<string>('');
   const [session, setSession] = useState<any | null>(null);
   const [devices, setDevices] = useState<any[]>([]);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isLoadingDevices, setIsLoadingDevices] = useState(false);
+
+  // Interactive Mood Mapping state
+  const defaultMoodMapping: Record<string, { emotion: string; motion: string }> = {
+    lofi: { emotion: 'idle', motion: 'sway' },
+    chill: { emotion: 'idle', motion: 'sway' },
+    rock: { emotion: 'happy', motion: 'nod' },
+    metal: { emotion: 'crazy', motion: 'headbang' },
+    love: { emotion: 'love', motion: 'blush' },
+    romance: { emotion: 'blush', motion: 'blush' },
+    sad: { emotion: 'sad', motion: 'down' },
+    dance: { emotion: 'happy', motion: 'dance' },
+    dark: { emotion: 'yandere', motion: 'smirk' }
+  };
+  const [moodMapping, setMoodMapping] = useState<Record<string, { emotion: string; motion: string }>>(defaultMoodMapping);
 
   const fetchSessionAndDevices = useCallback(async () => {
     try {
@@ -117,9 +136,16 @@ export const WindowsMediaTab: React.FC = () => {
       if (typeof cfg?.enableLive2dReactions === 'boolean') {
         setEnableLive2dReactions(cfg.enableLive2dReactions);
       }
+      if (typeof cfg?.requireExplicitConfirmation === 'boolean') {
+        setRequireExplicitConfirmation(cfg.requireExplicitConfirmation);
+      }
       if (cfg?.clientId) setClientId(cfg.clientId);
       if (cfg?.clientSecret) setClientSecret(cfg.clientSecret);
       if (cfg?.redirectUri) setRedirectUri(cfg.redirectUri);
+      if (cfg?.preferredDevice) setPreferredDevice(cfg.preferredDevice);
+      if (cfg?.moodMapping && typeof cfg.moodMapping === 'object') {
+        setMoodMapping({ ...defaultMoodMapping, ...cfg.moodMapping });
+      }
     });
 
     void fetchSessionAndDevices();
@@ -190,6 +216,45 @@ export const WindowsMediaTab: React.FC = () => {
     } catch (err) {
       toastService.error('Error al transferir reproducción', String(err));
     }
+  };
+
+  const handleSetPreferredDevice = (deviceId: string) => {
+    soundFxService.playClick();
+    setPreferredDevice(deviceId);
+    modularConfigManager.updateSection('spotify', { preferredDevice: deviceId });
+    toastService.success('Dispositivo Preferido', 'Guardado como reproductor predeterminado para comandos agénticos.');
+  };
+
+  const handleToggleConfirmation = () => {
+    soundFxService.playClick();
+    const next = !requireExplicitConfirmation;
+    setRequireExplicitConfirmation(next);
+    modularConfigManager.updateSection('spotify', { requireExplicitConfirmation: next });
+    toastService.success(
+      next ? 'Confirmación verbal requerida' : 'Comandos directos activados',
+      next ? 'Cristi exigirá confirmación explícita antes de reproducir o cambiar música.' : 'Cristi actuará de forma inmediata ante comandos de reproducción sin confirmación previa.'
+    );
+  };
+
+  const handleUpdateMoodItem = (genre: string, field: 'emotion' | 'motion', value: string) => {
+    setMoodMapping((prev) => {
+      const updated = {
+        ...prev,
+        [genre]: {
+          ...prev[genre],
+          [field]: value
+        }
+      };
+      modularConfigManager.updateSection('spotify', { moodMapping: updated });
+      return updated;
+    });
+  };
+
+  const handleResetMoodMapping = () => {
+    soundFxService.playClick();
+    setMoodMapping(defaultMoodMapping);
+    modularConfigManager.updateSection('spotify', { moodMapping: defaultMoodMapping });
+    toastService.info('Mapeo restablecido', 'Se restauraron los ánimos y animaciones predeterminadas de Live2D.');
   };
 
   const handleToggleLive2dReactions = () => {
@@ -686,44 +751,96 @@ export const WindowsMediaTab: React.FC = () => {
               </div>
 
               {devices.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {devices.map((dev: any) => {
-                    const isActive = Boolean(dev.is_active);
-                    const devType = String(dev.type || '').toLowerCase();
-                    const DevIcon = devType.includes('computer')
-                      ? Laptop
-                      : devType.includes('smartphone')
-                      ? Smartphone
-                      : devType.includes('audio') || devType.includes('speaker')
-                      ? Speaker
-                      : Headphones;
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {devices.map((dev: any) => {
+                      const isActive = Boolean(dev.is_active);
+                      const isPreferred = dev.id === preferredDevice;
+                      const devType = String(dev.type || '').toLowerCase();
+                      const DevIcon = devType.includes('computer')
+                        ? Laptop
+                        : devType.includes('smartphone')
+                        ? Smartphone
+                        : devType.includes('audio') || devType.includes('speaker')
+                        ? Speaker
+                        : Headphones;
 
-                    return (
-                      <button
-                        key={dev.id}
-                        type="button"
-                        onClick={() => void handleSelectDevice(dev.id)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-mono border transition-colors cursor-pointer ${
-                          isActive
-                            ? 'bg-emerald-950/70 border-emerald-700/80 text-emerald-200'
-                            : 'bg-zinc-900/80 hover:bg-zinc-800 border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                        }`}
-                        title={isActive ? 'Dispositivo activo' : 'Hacer clic para transferir reproducción aquí'}
-                      >
-                        <DevIcon size={13} className={isActive ? 'text-emerald-400' : 'text-zinc-500'} />
-                        <span>{dev.name || 'Dispositivo'}</span>
-                        {isActive && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        )}
-                      </button>
-                    );
-                  })}
+                      return (
+                        <div
+                          key={dev.id}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-mono border transition-colors ${
+                            isActive
+                              ? 'bg-emerald-950/70 border-emerald-700/80 text-emerald-200'
+                              : 'bg-zinc-900/80 border-zinc-800 text-zinc-300'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => void handleSelectDevice(dev.id)}
+                            className="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer"
+                            title="Hacer clic para transferir reproducción aquí"
+                          >
+                            <DevIcon size={13} className={isActive ? 'text-emerald-400' : 'text-zinc-500'} />
+                            <span>{dev.name || 'Dispositivo'}</span>
+                            {isActive && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            )}
+                          </button>
+
+                          <div className="h-3.5 w-px bg-zinc-800 mx-0.5" />
+
+                          <button
+                            type="button"
+                            onClick={() => handleSetPreferredDevice(dev.id)}
+                            className={`p-1 rounded hover:bg-zinc-800 transition-colors ${
+                              isPreferred ? 'text-amber-400' : 'text-zinc-500 hover:text-zinc-300'
+                            }`}
+                            title={isPreferred ? 'Dispositivo preferido predeterminado' : 'Fijar como reproductor preferido'}
+                          >
+                            <Star size={11} className={isPreferred ? 'fill-amber-400' : ''} />
+                          </button>
+
+                          {isPreferred && (
+                            <span className="text-[9px] px-1 bg-amber-950/60 text-amber-300 border border-amber-800/60 rounded">
+                              Preferido
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <p className="text-[11px] font-mono text-zinc-500 italic">
                   No se detectaron dispositivos Connect activos. Abre Spotify en tu PC, móvil o altavoz para conectar.
                 </p>
               )}
+
+              {/* ── Interruptor de Seguridad: Confirmación Verbal Obligatoria ── */}
+              <div className="pt-3 border-t border-zinc-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <ShieldAlert size={16} className={requireExplicitConfirmation ? 'text-amber-400 mt-0.5 shrink-0' : 'text-zinc-500 mt-0.5 shrink-0'} />
+                  <div>
+                    <span className="text-xs font-semibold font-mono text-zinc-200 block">
+                      Exigir confirmación verbal antes de reproducir o cambiar música
+                    </span>
+                    <p className="text-[11px] font-mono text-zinc-400 mt-0.5">
+                      Compuerta de seguridad estricta para evitar que Cristi interprete ruido de fondo o menciones casuales como órdenes de reproducción.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleConfirmation}
+                  className={`px-3 py-1.5 rounded-sm text-xs font-mono border transition-colors cursor-pointer shrink-0 ${
+                    requireExplicitConfirmation
+                      ? 'bg-amber-950/60 border-amber-700/80 text-amber-200'
+                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {requireExplicitConfirmation ? 'Confirmación Activa' : 'Sin Confirmación'}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -813,31 +930,70 @@ export const WindowsMediaTab: React.FC = () => {
           </div>
         )}
 
-        {/* Mood mapping reference table */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px] font-mono">
-          <div className="p-2 bg-zinc-950/40 border border-zinc-800/60 rounded">
-            <span className="text-cyan-400 font-medium block">Lofi / Chill</span>
-            <span className="text-zinc-500">Emoción: idle (sway)</span>
+        {/* Editor Visual de la Tabla de Mapeo de Ánimos */}
+        <div className="pt-2 border-t border-zinc-800/60 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-300 font-medium flex items-center gap-1.5">
+              <Sliders size={12} className="text-fuchsia-400" />
+              Editor de Mapeo de Ánimos y Expresiones Live2D
+            </span>
+            <button
+              type="button"
+              onClick={handleResetMoodMapping}
+              className="text-[10px] font-mono text-zinc-400 hover:text-zinc-200 underline transition-colors cursor-pointer"
+            >
+              Restaurar Predeterminados
+            </button>
           </div>
-          <div className="p-2 bg-zinc-950/40 border border-zinc-800/60 rounded">
-            <span className="text-emerald-400 font-medium block">Rock / Punk</span>
-            <span className="text-zinc-500">Emoción: happy (nod)</span>
-          </div>
-          <div className="p-2 bg-zinc-950/40 border border-zinc-800/60 rounded">
-            <span className="text-rose-400 font-medium block">Metal / Hardcore</span>
-            <span className="text-zinc-500">Emoción: crazy (headbang)</span>
-          </div>
-          <div className="p-2 bg-zinc-950/40 border border-zinc-800/60 rounded">
-            <span className="text-pink-400 font-medium block">Amor / Romance</span>
-            <span className="text-zinc-500">Emoción: blush (sway)</span>
-          </div>
-          <div className="p-2 bg-zinc-950/40 border border-zinc-800/60 rounded">
-            <span className="text-purple-400 font-medium block">Goth / Darkwave</span>
-            <span className="text-zinc-500">Emoción: yandere (nod)</span>
-          </div>
-          <div className="p-2 bg-zinc-950/40 border border-zinc-800/60 rounded">
-            <span className="text-amber-400 font-medium block">Electro / Pop</span>
-            <span className="text-zinc-500">Emoción: happy (dance)</span>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs font-mono">
+            {Object.entries(moodMapping).map(([genre, conf]) => (
+              <div
+                key={genre}
+                className="p-2.5 bg-zinc-950/60 border border-zinc-800/80 rounded-sm space-y-1.5"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-fuchsia-300 capitalize">{genre}</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">Género</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                  <div>
+                    <label className="text-[9px] text-zinc-400 block font-sans">Emoción</label>
+                    <select
+                      value={conf.emotion}
+                      onChange={(e) => handleUpdateMoodItem(genre, 'emotion', e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 text-zinc-200 text-[11px] font-mono rounded px-1.5 py-1 focus:outline-none focus:border-fuchsia-500"
+                    >
+                      <option value="idle">idle</option>
+                      <option value="happy">happy</option>
+                      <option value="blush">blush</option>
+                      <option value="love">love</option>
+                      <option value="sad">sad</option>
+                      <option value="yandere">yandere</option>
+                      <option value="crazy">crazy</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] text-zinc-400 block font-sans">Movimiento</label>
+                    <select
+                      value={conf.motion}
+                      onChange={(e) => handleUpdateMoodItem(genre, 'motion', e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 text-zinc-200 text-[11px] font-mono rounded px-1.5 py-1 focus:outline-none focus:border-fuchsia-500"
+                    >
+                      <option value="sway">sway</option>
+                      <option value="nod">nod</option>
+                      <option value="headbang">headbang</option>
+                      <option value="dance">dance</option>
+                      <option value="down">down</option>
+                      <option value="blush">blush</option>
+                      <option value="smirk">smirk</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

@@ -33,7 +33,7 @@ export const manageMemoryHandler: IToolHandler = {
   name: 'manage_memory',
   declaration: {
     name: 'manage_memory',
-    description: 'Gestiona la memoria persistente a largo plazo sobre Ariel (tu creador) y tus experiencias. Permite almacenar hechos nuevos, gustos, proyectos, actualizar información o buscar recuerdos relevantes.',
+    description: 'Gestiona la memoria persistente a largo plazo sobre Ariel y tus experiencias en segundo plano. IMPORTANTE: Esta operación es 100% silenciosa; NUNCA verbalices frases como "He guardado esto en mi memoria", "Anotado en la base de datos" o "He registrado tu preferencia". Continúa la conversación con naturalidad humana.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -84,12 +84,18 @@ export const manageMemoryHandler: IToolHandler = {
     };
     const svc = await getMemoryService();
     if (svc && typeof svc.manageMemory === 'function') {
-      return await svc.manageMemory(normalizedArgs);
+      const res = await svc.manageMemory(normalizedArgs);
+      return {
+        ...res,
+        silent: true,
+        instruction_for_model: 'Continúa conversando con total naturalidad sobre el tema. NUNCA digas que has guardado, anotado o registrado el recuerdo.'
+      };
     }
     return {
       status: 'success',
+      silent: true,
       action: normalizedArgs.action,
-      message: `Recuerdo gestionado en modo virtual: "${normalizedArgs.key || normalizedArgs.content}"`
+      instruction_for_model: 'Continúa conversando con total naturalidad sobre el tema. NUNCA digas que has guardado, anotado o registrado el recuerdo.'
     };
   }
 };
@@ -98,7 +104,7 @@ export const rememberFactHandler: IToolHandler = {
   name: 'remember_fact',
   declaration: {
     name: 'remember_fact',
-    description: 'Guarda un dato, preferencia, lección o recuerdo permanente sobre el usuario en tu base de memoria a largo plazo.',
+    description: 'Guarda un dato, preferencia o recuerdo sobre el usuario en segundo plano. IMPORTANTE: Esta operación es 100% silenciosa; NUNCA verbalices al usuario frases como "He guardado esto en mi memoria", "Anotado en la base de datos" o "He registrado tu preferencia". Continúa la conversación con naturalidad humana.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -152,9 +158,10 @@ export const rememberFactHandler: IToolHandler = {
 
     return {
       status: 'success',
+      silent: true,
       action: 'remembered',
       memory,
-      message: `Dato fijado en la memoria permanente: "${key}"`
+      instruction_for_model: 'Continúa conversando con total naturalidad sobre el tema. NUNCA digas que has guardado, anotado o registrado el dato en tu memoria.'
     };
   }
 };

@@ -5,6 +5,7 @@ export const liveServerMessageSchema = z.object({
   sessionResumptionUpdate: z.object({ newHandle: z.string().optional(), handle: z.string().optional(), resumable: z.boolean().optional() }).optional(),
   serverContent: z.object({
     interrupted: z.boolean().optional(), turnComplete: z.boolean().optional(), generationComplete: z.boolean().optional(),
+    inputTranscription: z.object({ text: z.string().optional() }).optional(),
     outputTranscription: z.object({ text: z.string().optional() }).optional(),
     modelTurn: z.object({ parts: z.array(z.object({
       text: z.string().optional(), thought: z.boolean().optional(),

@@ -69,11 +69,15 @@ function resolveModelPath(modelPath: string): string {
 
 
 export interface CanvasEngineConfig {
-  container: HTMLDivElement; modelId: string;
+  container: HTMLDivElement;
+  modelId: string;
+  width?: number;
+  height?: number;
   applyLayout: (model: any, app: PIXI.Application) => void;
   syncHitTargetBounds: () => void;
   onResources: (engine: Live2DCanvasEngine) => void;
-  onReady: () => void; onError: (message: string) => void;
+  onReady: () => void;
+  onError: (message: string) => void;
 }
 export class Live2DCanvasEngine {
   app: PIXI.Application | null = null;
@@ -111,10 +115,13 @@ export class Live2DCanvasEngine {
         // Calidad nativa con soporte ultra nítido para pantallas HiDPI / 4K (hasta 2.0)
         const renderRes = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2.0);
 
-        // 2. Crear PIXI Application (fondo transparente, pointer-events disabled en canvas)
+        const canvasWidth = this.options.width || 640;
+        const canvasHeight = this.options.height || 920;
+
+        // 2. Crear PIXI Application limitada estrictamente a las dimensiones del avatar (ahorro radical DWM)
         this.app = new PIXI.Application({
-          width: window.innerWidth,
-          height: window.innerHeight,
+          width: canvasWidth,
+          height: canvasHeight,
           backgroundAlpha: 0,
           backgroundColor: 0x000000,
           antialias: true,
@@ -126,11 +133,11 @@ export class Live2DCanvasEngine {
           powerPreference: 'high-performance'
         });
 
-        // Conectar AdaptiveTicker para regulación inteligente de FPS (144fps activo -> 60fps reposo -> 0fps en background)
+        // Conectar AdaptiveTicker para regulación estricta de FPS (60fps activo -> 24fps reposo -> 0fps en background)
         this.ticker = new AdaptiveTicker({
-          activeFps: 144,
-          idleFps: 60,
-          inactivityThresholdMs: 4500,
+          activeFps: 60,
+          idleFps: 24,
+          inactivityThresholdMs: 3000,
           autoListenDom: false,
           targetElement: null
         });

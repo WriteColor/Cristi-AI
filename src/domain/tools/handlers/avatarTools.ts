@@ -113,8 +113,9 @@ export const moveAvatarHandler: IToolHandler = {
   }
 };
 
+// Pruned cosmetic tools: move_avatar and trigger_model_motion are excluded from active Live tool declarations
+// so Live2D motions and poses are driven reactively by ContextualEmotionOrchestrator without blocking LLM voice turns.
 export const avatarTools: IToolHandler[] = [
-  triggerCompanionGestureHandler,
-  triggerModelMotionHandler,
-  moveAvatarHandler
+  triggerCompanionGestureHandler
 ];
+

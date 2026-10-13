@@ -5,6 +5,7 @@ import type {
   DisplayInfo as IpcDisplayInfo,
   ProcessMemoryInfo,
   ScreenRegion,
+  ScreenCaptureRequest,
   MemoryRecord,
   MemoryLoadResult,
   MemorySaveResult,
@@ -97,7 +98,7 @@ export class ElectronBridgeService {
     if (this._interactionLockCount > 0) {
       this._interactionLockCount--;
       if (this._interactionLockCount === 0) {
-        this.setIgnoreMouseEvents(true, { forward: true });
+        this.setIgnoreMouseEvents(true);
       }
     }
   }
@@ -106,24 +107,25 @@ export class ElectronBridgeService {
     this._interactionLockCount = 0;
     this._lastIgnore = null;
     this._lastForward = null;
-    this.setIgnoreMouseEvents(true, { forward: true });
+    this.setIgnoreMouseEvents(true);
   }
 
   /**
    * Toggle window click-through mode.
    * Deduplicates identical consecutive calls to prevent flooding Electron IPC.
+   * Never forwards global mouse events to avoid low-level WH_MOUSE_LL hooks.
    */
   public setIgnoreMouseEvents(ignore: boolean, options: { forward?: boolean } = {}): void {
     if (ignore === true && this._interactionLockCount > 0) {
       return; // Blocked by InteractionLock
     }
-    const forward = Boolean(options?.forward);
+    const forward = false; // Intentionally false: eliminate WH_MOUSE_LL hook
     if (this._lastIgnore === ignore && this._lastForward === forward) {
       return; // Skip redundant IPC message
     }
     this._lastIgnore = ignore;
     this._lastForward = forward;
-    getApi()?.setIgnoreMouseEvents?.(ignore, { ...options, forward });
+    getApi()?.setIgnoreMouseEvents?.(ignore, { ...options, forward: false });
   }
 
   public focusWindow(): void {
@@ -144,6 +146,19 @@ export class ElectronBridgeService {
 
   public async getAlwaysOnTop(): Promise<boolean> {
     return (await getApi()?.getAlwaysOnTop?.()) ?? false;
+  }
+
+  public async listCapturableWindows(): Promise<Array<{ id: string; name: string; thumbnail?: string }>> {
+    try {
+      const api = getApi();
+      if (api?.listCapturableWindows) {
+        return (await api.listCapturableWindows()) || [];
+      }
+      return [];
+    } catch (err) {
+      console.warn('[ElectronBridge] Error listing capturable windows:', err);
+      return [];
+    }
   }
 
   public async getDisplayInfo(): Promise<DisplayInfo> {
@@ -430,12 +445,15 @@ export class ElectronBridgeService {
     return false;
   }
 
-  public async captureScreenNative(region: ScreenRegion | null = null, fresh = false): Promise<string | null> {
+  public async captureScreenNative(requestOrRegion?: ScreenRegion | ScreenCaptureRequest | null, fresh = false): Promise<string | null> {
     const api = getApi();
-    if (api?.captureScreenNative) {
-      return await api.captureScreenNative(fresh ? { region, fresh: true } : region);
+    if (!api?.captureScreenNative) return null;
+    if (requestOrRegion && typeof requestOrRegion === 'object' && ('targetWindow' in requestOrRegion || 'windowId' in requestOrRegion || 'displayId' in requestOrRegion || 'region' in requestOrRegion)) {
+      const req = requestOrRegion as ScreenCaptureRequest;
+      return await api.captureScreenNative({ ...req, fresh: fresh || req.fresh });
     }
-    return null;
+    const region = requestOrRegion as ScreenRegion | null;
+    return await api.captureScreenNative(fresh ? { region, fresh: true } : region);
   }
 
   // ── System Diagnostics & Native Features ─────────────────────────────────

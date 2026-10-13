@@ -62,8 +62,7 @@ export const windowsSpotifyLaunchHandler: IToolHandler = {
   }
 };
 
-export const windowsMediaTools: IToolHandler[] = [
-  windowsMediaControlHandler,
-  windowsMediaStatusHandler,
-  windowsSpotifyLaunchHandler,
-];
+// Unified with spotifyMcpTools: Spotify MCP server acts as the authoritative multimedia controller
+// with native Windows SMTC fallback. Excluded from tool registry to eliminate competing media tools.
+export const windowsMediaTools: IToolHandler[] = [];
+

@@ -5,6 +5,7 @@
 
 import { eventBus, EVENTS } from '../../../infrastructure/events/eventBus.ts';
 import { logger } from '../../../infrastructure/logging/logger.ts';
+import { modularConfigManager } from '../../../config/ModularConfigManager';
 
 export interface MusicMoodResult {
   mood: 'chill' | 'rock' | 'metal' | 'love' | 'sad' | 'dance' | 'dark' | 'happy';
@@ -18,30 +19,54 @@ export function detectMusicMood(text: string): MusicMoodResult {
   }
 
   const t = text.toLowerCase();
+  let baseMood: MusicMoodResult['mood'] = 'happy';
+  let defaultEmotion: MusicMoodResult['suggestedEmotion'] = 'happy';
+  let defaultMotion: MusicMoodResult['suggestedMotion'] = 'nod';
 
   if (/lo-?fi|chill|relax|ambient|study|peaceful|soft|calm|jazz|acoustic/i.test(t)) {
-    return { mood: 'chill', suggestedEmotion: 'idle', suggestedMotion: 'sway' };
-  }
-  if (/death|black metal|doom|thrash|slipknot|cannibal|breakdown|grindcore|heavy metal/i.test(t)) {
-    return { mood: 'metal', suggestedEmotion: 'crazy', suggestedMotion: 'headbang' };
-  }
-  if (/rock|punk|grunge|deftones|nirvana|guitar|alternative|indie/i.test(t)) {
-    return { mood: 'rock', suggestedEmotion: 'happy', suggestedMotion: 'nod' };
-  }
-  if (/love|amor|heart|beso|darling|quererte|enamorad|romantic|lover|sweetheart/i.test(t)) {
-    return { mood: 'love', suggestedEmotion: 'blush', suggestedMotion: 'sway' };
-  }
-  if (/sad|depress|cry|llorar|alone|triste|melanchol|heartbreak|tears|pain/i.test(t)) {
-    return { mood: 'sad', suggestedEmotion: 'sad', suggestedMotion: 'down' };
-  }
-  if (/dance|pop|electro|party|disco|reggaeton|techno|house|club|edm/i.test(t)) {
-    return { mood: 'dance', suggestedEmotion: 'happy', suggestedMotion: 'dance' };
-  }
-  if (/goth|dark|vampire|witch|shadow|darkwave|post-punk|bauhaus|cure/i.test(t)) {
-    return { mood: 'dark', suggestedEmotion: 'yandere', suggestedMotion: 'nod' };
+    baseMood = 'chill';
+    defaultEmotion = 'idle';
+    defaultMotion = 'sway';
+  } else if (/death|black metal|doom|thrash|slipknot|cannibal|breakdown|grindcore|heavy metal/i.test(t)) {
+    baseMood = 'metal';
+    defaultEmotion = 'crazy';
+    defaultMotion = 'headbang';
+  } else if (/rock|punk|grunge|deftones|nirvana|guitar|alternative|indie/i.test(t)) {
+    baseMood = 'rock';
+    defaultEmotion = 'happy';
+    defaultMotion = 'nod';
+  } else if (/love|amor|heart|beso|darling|quererte|enamorad|romantic|lover|sweetheart/i.test(t)) {
+    baseMood = 'love';
+    defaultEmotion = 'blush';
+    defaultMotion = 'sway';
+  } else if (/sad|depress|cry|llorar|alone|triste|melanchol|heartbreak|tears|pain/i.test(t)) {
+    baseMood = 'sad';
+    defaultEmotion = 'sad';
+    defaultMotion = 'down';
+  } else if (/dance|pop|electro|party|disco|reggaeton|techno|house|club|edm/i.test(t)) {
+    baseMood = 'dance';
+    defaultEmotion = 'happy';
+    defaultMotion = 'dance';
+  } else if (/goth|dark|vampire|witch|shadow|darkwave|post-punk|bauhaus|cure/i.test(t)) {
+    baseMood = 'dark';
+    defaultEmotion = 'yandere';
+    defaultMotion = 'nod';
   }
 
-  return { mood: 'happy', suggestedEmotion: 'happy', suggestedMotion: 'nod' };
+  // Check user-configured moodMapping in modularConfigManager
+  try {
+    const customMapping = modularConfigManager.getSection('spotify')?.moodMapping;
+    if (customMapping && typeof customMapping === 'object' && customMapping[baseMood]) {
+      const custom = customMapping[baseMood];
+      return {
+        mood: baseMood,
+        suggestedEmotion: (custom.emotion || defaultEmotion) as MusicMoodResult['suggestedEmotion'],
+        suggestedMotion: (custom.motion || defaultMotion) as MusicMoodResult['suggestedMotion']
+      };
+    }
+  } catch (_) {}
+
+  return { mood: baseMood, suggestedEmotion: defaultEmotion, suggestedMotion: defaultMotion };
 }
 
 export class SpotifyEmotionBridge {

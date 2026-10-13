@@ -36,6 +36,7 @@ export const IPC_CHANNELS = {
   MOVE_FILE: 'move-file',
   SEARCH_DIRECTORY: 'search-directory',
   LIST_WINDOWS: 'list-windows',
+  GET_CAPTURABLE_WINDOWS: 'get-capturable-windows',
   FOCUS_OS_WINDOW: 'focus-os-window',
   MANAGE_OS_WINDOW: 'manage-os-window',
   LIST_INSTALLED_APPS: 'list-installed-apps',

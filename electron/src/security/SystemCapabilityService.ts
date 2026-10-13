@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { PathPolicy, isPathProtectedFromDeletion, type PathScope } from './PathPolicy.ts';
+import { PathPolicy, isPathProtectedFromDeletion, isPathProtectedFromModification, type PathScope } from './PathPolicy.ts';
 import type { FileRequest } from '../../../shared/ipc/contracts.ts';
 
 const execFileAsync = promisify(execFile);
@@ -24,13 +24,17 @@ const electron: ElectronLike = electronModuleObj?.app
     : {};
 const { app, dialog, BrowserWindow } = electron;
 
+export { isPathProtectedFromDeletion, isPathProtectedFromModification };
+
 const DANGEROUS_PATTERNS = [
-  /format\s+[a-z]:/i,
+  /\bformat\s+[a-z]:/i,
   /\bdiskpart\b/i,
   /\bbcdedit\b/i,
-  /cipher\s+\/w/i,
-  /\b(rmdir|del|erase|remove-item)\b.*[\\/](windows|system32|systemroot)/i,
-  /\b(rmdir|del|erase|remove-item)\b.*([a-z]:[\\/]?\*?["']?\s*$)/i,
+  /\bcipher\s+\/w/i,
+  /\b(rmdir|rd|del|erase|remove-item)\b.*[\\/](windows|system32|winsxs|systemroot|recovery|boot|efi)\b/i,
+  /\b(rmdir|rd|del|erase|remove-item)\b.*([a-z]:[\\/]?\*?["']?\s*$)/i,
+  /\b(del|erase|remove-item)\b.*(pagefile\.sys|swapfile\.sys|hiberfil\.sys|bootmgr)\b/i,
+  /\bremove-item\s+.*[a-z]:[\\/]?\*?\s+(-recurse|-r)\b/i,
 ];
 
 export function isCommandSafe(command: string): boolean {

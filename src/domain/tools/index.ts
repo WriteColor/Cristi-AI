@@ -39,11 +39,9 @@ toolRegistry.registerMany([
   ...visionTools,
   ...memoryTools,
   ...widgetTools,
-  ...windowsMediaTools,
   ...spotifyMcpTools,
   ...browserMcpTools,
-  ...mcpTools,
-  ...loggerTools
+  ...mcpTools
 ]);
 
 export default toolRegistry;

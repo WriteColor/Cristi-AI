@@ -25,6 +25,9 @@ export interface CompanionState {
   isSpeaking: boolean;
   isListening: boolean;
   isThinking: boolean;
+  thoughtText: string | null;
+  isOsOperating: boolean;
+  osOperationDetails: string | null;
   isClickThroughEnabled: boolean;
   isUiVisible: boolean;
   isSolidBackdrop: boolean;
@@ -52,6 +55,9 @@ export interface CompanionState {
   setIsSpeaking: (isSpeaking: boolean) => void;
   setIsListening: (isListening: boolean) => void;
   setIsThinking: (isThinking: boolean) => void;
+  setThoughtText: (thoughtText: string | null) => void;
+  appendThoughtText: (chunk: string) => void;
+  setIsOsOperating: (isOsOperating: boolean, details?: string | null) => void;
   setIsClickThroughEnabled: (isClickThroughEnabled: boolean) => void;
   toggleClickThrough: () => void;
   setIsUiVisible: (isUiVisible: boolean) => void;
@@ -79,6 +85,9 @@ export const useCompanionStore = create<CompanionState>()((set, get) => ({
   isSpeaking: false,
   isListening: false,
   isThinking: false,
+  thoughtText: null,
+  isOsOperating: false,
+  osOperationDetails: null,
   isClickThroughEnabled: true,
   isUiVisible: true,
   isSolidBackdrop: sceneManager.getScene().isSceneVisible,
@@ -131,13 +140,25 @@ export const useCompanionStore = create<CompanionState>()((set, get) => ({
   setIsZenMode: (isZenMode) => set({ isZenMode }),
   setIsSpeaking: (isSpeaking) => set({ isSpeaking }),
   setIsListening: (isListening) => set({ isListening }),
-  setIsThinking: (isThinking) => set({ isThinking }),
+  setIsThinking: (isThinking) => set((s) => ({ isThinking, thoughtText: isThinking ? s.thoughtText : null })),
+  setThoughtText: (thoughtText) => set({ thoughtText }),
+  appendThoughtText: (chunk) => set((s) => ({
+    thoughtText: s.thoughtText ? `${s.thoughtText} ${chunk}`.slice(-400) : chunk.slice(-400)
+  })),
+  setIsOsOperating: (isOsOperating, details = null) => set({ isOsOperating, osOperationDetails: details }),
   setIsClickThroughEnabled: (isClickThroughEnabled) => set({ isClickThroughEnabled }),
   toggleClickThrough: () => set((state) => ({ isClickThroughEnabled: !state.isClickThroughEnabled })),
   setIsUiVisible: (isUiVisible) => set({ isUiVisible }),
   setIsSolidBackdrop: (isSolidBackdrop) => set({ isSolidBackdrop }),
   setActiveDecision: (activeDecision) => set({ activeDecision }),
-  setActiveToolName: (activeToolName) => set({ activeToolName }),
+  setActiveToolName: (activeToolName) => {
+    const isOs = Boolean(activeToolName && /terminal|powershell|cmd|file|disk|write|read|system/i.test(activeToolName));
+    set({
+      activeToolName,
+      isOsOperating: isOs,
+      osOperationDetails: isOs ? `Operación en C:\\ (${activeToolName})` : null
+    });
+  },
   openContextMenu: (x, y, bounds = null) => set({ contextMenu: { isOpen: true, x, y, bounds } }),
   closeContextMenu: () => set({ contextMenu: { isOpen: false, x: 0, y: 0, bounds: null } }),
 }));

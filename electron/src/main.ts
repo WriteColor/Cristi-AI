@@ -31,6 +31,8 @@ app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('disable-software-rasterizer');
 app.commandLine.appendSwitch('enable-transparent-visuals');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('enable-features', 'CalculateNativeWinOcclusion');
 setupAppLifecycle({
   rootDir: ROOT_DIR,
   onReady: async () => {

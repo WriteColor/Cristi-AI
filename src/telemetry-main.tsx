@@ -28,6 +28,7 @@ import {
 import { electronBridge } from './services/desktop/ElectronBridge';
 import { memoryService } from './domain/integrations/memory/MemoryService';
 import { detectMusicMood } from './mcp/servers/spotify/SpotifyEmotionBridge';
+import { sessionTranscriptBuffer, type DialogueTurn } from './domain/gemini/SessionTranscriptBuffer';
 import './index.css';
 
 interface ProcessMetricItem {
@@ -306,8 +307,17 @@ function TelemetryApp() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const historyRef = useRef<MetricHistoryBuffers>({ cpu: [], memory: [], ping: [], bargeIn: [] });
 
+  const [transcriptTurns, setTranscriptTurns] = useState<readonly DialogueTurn[]>(() => sessionTranscriptBuffer.getTurns());
+  const [estimatedTokens, setEstimatedTokens] = useState<number>(() => sessionTranscriptBuffer.getEstimatedTokens());
+
+  const refreshTranscript = useCallback(() => {
+    setTranscriptTurns(sessionTranscriptBuffer.getTurns());
+    setEstimatedTokens(sessionTranscriptBuffer.getEstimatedTokens());
+  }, []);
+
   const fetchTelemetry = useCallback(async () => {
     setIsRefreshing(true);
+    refreshTranscript();
     const pingStart = performance.now();
     try {
       const [rawMemory, rawGpu, rawSnapshot, rawMedia] = await Promise.all([
@@ -1008,6 +1018,80 @@ function TelemetryApp() {
                 ))}
               </div>
             )}
+          </article>
+        </section>
+
+        {/* ── 6. Búfer de Diálogo Continuo Puro (SessionTranscriptBuffer) ────────── */}
+        <section className="col-span-12">
+          <article className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2 text-cyan-400">
+                <Terminal size={18} />
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-200">
+                  Búfer de Diálogo Continuo Puro (SessionTranscriptBuffer)
+                </h2>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[11px] font-mono text-cyan-300 bg-cyan-950/70 px-2.5 py-0.5 rounded border border-cyan-800/80">
+                  Tokens Estimados: ~{estimatedTokens}
+                </span>
+                <span className="text-[11px] font-mono text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
+                  {transcriptTurns.length} turnos
+                </span>
+                <button
+                  type="button"
+                  onClick={refreshTranscript}
+                  className="p-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 rounded border border-zinc-800 transition-colors cursor-pointer"
+                  title="Refrescar historial conversacional puro"
+                >
+                  <RefreshCw size={12} />
+                </button>
+              </div>
+            </div>
+
+            <div className="text-[11px] font-mono text-zinc-400 mb-3 bg-zinc-950/60 p-2.5 rounded border border-zinc-800/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span>Filtro de Ruido Activo: Llamadas a herramientas MCP, chunks de audio y JSON crudo excluidos. Solo diálogo conversacional puro.</span>
+              <span className="text-emerald-400 font-semibold flex items-center gap-1 shrink-0">
+                <CheckCircle2 size={12} /> Buffer Activo
+              </span>
+            </div>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {transcriptTurns.length === 0 ? (
+                <div className="text-center py-8 text-zinc-500 font-mono text-xs border border-dashed border-zinc-800/80 rounded">
+                  Sin turnos en el búfer actual. Inicia una conversación por voz con Cristi para auditar los turnos.
+                </div>
+              ) : (
+                transcriptTurns.map((turn, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-md border text-xs font-mono transition-colors ${
+                      turn.role === 'user'
+                        ? 'bg-zinc-950/80 border-cyan-900/60 text-zinc-200'
+                        : 'bg-zinc-900/80 border-purple-900/60 text-zinc-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span
+                        className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-none border ${
+                          turn.role === 'user'
+                            ? 'bg-cyan-950 text-cyan-300 border-cyan-800'
+                            : 'bg-purple-950 text-purple-300 border-purple-800'
+                        }`}
+                      >
+                        {turn.role === 'user' ? '👤 USUARIO (ARIEL)' : '✨ CRISTI AI'}
+                      </span>
+                      <span className="text-[10px] text-zinc-500">
+                        {turn.timestamp ? new Date(turn.timestamp).toLocaleTimeString() : `#${idx + 1}`}
+                      </span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed whitespace-pre-wrap text-zinc-300 mt-1">
+                      {turn.text}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
           </article>
         </section>
       </div>

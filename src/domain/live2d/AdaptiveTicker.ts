@@ -41,12 +41,13 @@ export class AdaptiveTicker {
   private isVoicePlaying: boolean = false;
   private isBossKey: boolean = false;
   private isWindowHidden: boolean = false;
+  private isLive2dVisible: boolean = true;
 
   private currentBudget: AdaptiveTickerBudget = 'active';
   private forcedBudget: AdaptiveTickerBudget | null = null;
-  private targetFps: number = 144;
-  private currentMode: FpsMode = 'active_144';
-  private currentFps: number = 144;
+  private targetFps: number = 60;
+  private currentMode: FpsMode = 'active_60';
+  private currentFps: number = 60;
   private externalFpsCap: number | null = null;
   private pixiTicker: PIXI.Ticker | null = null;
   private checkIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -70,16 +71,16 @@ export class AdaptiveTicker {
       }
     }
 
-    this.activeFps = Math.max(1, opts.activeFps ?? 144);
-    this.idleFps = Math.max(1, opts.idleFps ?? 15);
-    this.inactivityThresholdMs = Math.max(1, opts.inactivityThresholdMs ?? 4500);
+    this.activeFps = Math.min(60, Math.max(1, opts.activeFps ?? 60));
+    this.idleFps = Math.max(1, opts.idleFps ?? 24);
+    this.inactivityThresholdMs = Math.max(1, opts.inactivityThresholdMs ?? 3000);
     this.autoListenDom = opts.autoListenDom ?? true;
     this.targetElement = opts.targetElement !== undefined ? opts.targetElement : (typeof window !== 'undefined' ? window : null);
     this.onFpsModeChange = opts.onFpsModeChange;
 
     this.currentFps = this.activeFps;
     this.targetFps = this.activeFps;
-    this.currentMode = this.activeFps >= 120 ? 'active_144' : 'active_60';
+    this.currentMode = 'active_60';
     this.isWindowHidden = typeof document !== 'undefined' && document.hidden;
 
     if (this.pixiTicker) {
@@ -168,6 +169,15 @@ export class AdaptiveTicker {
   }
 
   /**
+   * Set Live2D model visibility state (visible = false -> strictly 0 FPS).
+   */
+  public setLive2dVisible(visible: boolean): void {
+    if (this.isLive2dVisible === visible) return;
+    this.isLive2dVisible = visible;
+    this.evaluate();
+  }
+
+  /**
    * Get current operating mode.
    */
   /**
@@ -249,7 +259,7 @@ export class AdaptiveTicker {
     let nextFps: number;
     let nextBudget: AdaptiveTickerBudget;
 
-    if (this.isBossKey || this.isWindowHidden) {
+    if (this.isBossKey || this.isWindowHidden || !this.isLive2dVisible) {
       nextMode = 'suspended_0';
       nextFps = 0;
       nextBudget = 'suspended';

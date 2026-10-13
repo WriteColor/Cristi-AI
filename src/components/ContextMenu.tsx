@@ -12,7 +12,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   X, Pin, Zap, Monitor, Volume2,
   ChevronDown, ChevronRight, Check, Sliders, Image as ImageIcon, Activity,
-  FolderPlus, Settings, LogOut, LucideIcon, Eye, EyeOff, RefreshCw
+  FolderPlus, Settings, LogOut, LucideIcon, Eye, EyeOff, RefreshCw, AppWindow
 } from 'lucide-react';
 import { GEMINI_MODELS_LIST, DEFAULT_MODEL_ID } from '../config/models.js';
 import { GEMINI_STANDARD_VOICES } from '../config/voices.js';
@@ -164,6 +164,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(function Conte
   const switchVoice = useSettingsStore((s) => s.switchVoice);
   const openSettings = useSettingsStore((s) => s.handleOpenSettings);
   const openRegionPicker = useVisionStore((s) => s.openRegionPicker);
+  const isScreenWatchActive = useVisionStore((s) => s.isScreenWatchActive);
+  const isCameraActive = useVisionStore((s) => s.isCameraActive);
+  const captureMode = useVisionStore((s) => s.captureMode);
+  const targetWindowId = useVisionStore((s) => s.targetWindowId);
+  const availableWindows = useVisionStore((s) => s.availableWindows);
+  const refreshSources = useVisionStore((s) => s.refreshSources);
+  const setTargetWindow = useVisionStore((s) => s.setTargetWindow);
+  const startVisionPipeline = useVisionStore((s) => s.startVisionPipeline);
+  const stopVisionPipeline = useVisionStore((s) => s.stopVisionPipeline);
 
   const isOpen = props.isOpen !== undefined ? props.isOpen : storeContextMenu.isOpen;
   const position = props.position !== undefined ? props.position : storeContextMenu;
@@ -182,13 +191,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(function Conte
   const menuRef = useRef<HTMLDivElement>(null);
   const [activeSection, setActiveSection] = useState<'ai' | 'tools' | null>(null);
 
-  // Resetear estado interno cada vez que el menú se abre de nuevo
+  // Resetear estado interno cada vez que el menú se abre de nuevo y precargar fuentes
   useEffect(() => {
     if (isOpen) {
       setActiveSection(null);
       electronBridge.setIgnoreMouseEvents(false);
+      void refreshSources();
     }
-  }, [isOpen]);
+  }, [isOpen, refreshSources]);
 
   const { interactiveProps } = useClickThrough();
 
@@ -258,7 +268,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(function Conte
 
   const aiModelOptions: ContextMenuDropdownOption[] = GEMINI_MODELS_LIST.map((m: { id: string; name: string }) => ({
     value: m.id,
-    label: m.name
+    label: m.id === 'gemini-3.8-live'
+      ? 'Gemini 3.8 Live (Ultra Baja Latencia)'
+      : m.id === 'gemini-3.8-live-extended-thinking'
+      ? 'Gemini 3.8 Live (Thinking Extendido)'
+      : m.id === 'gemini-3.1-flash-live-preview'
+      ? 'Gemini 3.1 Flash Live (Multimodal)'
+      : 'Gemini 2.5 Flash (Audio Nativo)'
   }));
 
   // Exclusivamente las 4 voces femeninas verificadas
@@ -300,7 +316,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(function Conte
       {/* ── Encabezado Minimalista Shadcn ───────────────────────────────── */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800 bg-zinc-900/60">
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 bg-zinc-400" />
+          <span className="w-2 h-2 bg-emerald-400" />
           <span className="text-xs font-semibold tracking-wide text-zinc-100 font-mono">Cristi AI</span>
         </div>
         <button
@@ -309,7 +325,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(function Conte
             soundFxService.playClick();
             onClose?.();
           }}
-          className="p-0.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-sm transition-colors"
+          className="p-0.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-sm transition-colors cursor-pointer"
           title="Cerrar menú"
         >
           <X size={13} />
@@ -321,7 +337,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(function Conte
         <div className="border border-zinc-800/80 rounded-sm bg-zinc-900/30">
           <button
             type="button"
-            className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/50 transition-colors font-mono rounded-sm"
+            className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/50 transition-colors font-mono rounded-sm cursor-pointer"
             onClick={() => toggleSection('ai')}
           >
             <div className="flex items-center gap-2">
@@ -352,37 +368,147 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(function Conte
           )}
         </div>
 
-        {/* ── 4. CATEGORÍA: HERRAMIENTAS TÁCTICAS ───────────────────────── */}
+        {/* ── 4. CATEGORÍA: HERRAMIENTAS TÁCTICAS & VISIÓN ────────────────── */}
         <div className="border border-zinc-800/80 rounded-sm bg-zinc-900/30">
           <button
             type="button"
-            className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/50 transition-colors font-mono rounded-sm"
+            className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/50 transition-colors font-mono rounded-sm cursor-pointer"
             onClick={() => toggleSection('tools')}
           >
             <div className="flex items-center gap-2">
               <Sliders size={13} className="text-zinc-400" />
-              <span>Herramientas Tácticas</span>
+              <span>Herramientas &amp; Visión</span>
             </div>
             {activeSection === 'tools' ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </button>
 
           {activeSection === 'tools' && (
             <div className="p-1.5 border-t border-zinc-800/60 bg-zinc-950/50 space-y-0.5">
+              {/* Visión: Pantalla Completa */}
               <button
                 type="button"
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-sm transition-colors text-left font-mono"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-sm transition-colors text-left font-mono cursor-pointer"
+                onClick={() => {
+                  soundFxService.playClick();
+                  void startVisionPipeline({ mode: 'fullscreen', displayId: 'primary' });
+                  onClose?.();
+                }}
+              >
+                <Monitor size={12} className="text-emerald-400 shrink-0" />
+                <span>Visión: Pantalla 1 (0.5 FPS)</span>
+              </button>
+
+              {/* Visión: Región Específica */}
+              <button
+                type="button"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-sm transition-colors text-left font-mono cursor-pointer"
                 onClick={() => {
                   soundFxService.playClick();
                   onOpenRegionPicker?.();
                   onClose?.();
                 }}
               >
-                <Monitor size={12} className="text-zinc-400 shrink-0" />
-                <span>Capturar Región de Pantalla</span>
+                <Monitor size={12} className="text-cyan-400 shrink-0" />
+                <span>Visión: Región Interactiva</span>
               </button>
+
+              {/* Visión: Cámara Web */}
               <button
                 type="button"
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-sm transition-colors text-left font-mono"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-sm transition-colors text-left font-mono cursor-pointer"
+                onClick={() => {
+                  soundFxService.playClick();
+                  void startVisionPipeline({ mode: 'camera' });
+                  onClose?.();
+                }}
+              >
+                <Eye size={12} className="text-sky-400 shrink-0" />
+                <span>Visión: Cámara Web (0.5 FPS)</span>
+              </button>
+
+              {/* Visión: Ventana de Aplicación */}
+              <div className="pt-1 pb-1 border-t border-zinc-800/60 mt-1">
+                <div className="flex items-center justify-between px-2 py-0.5 text-[10px] text-zinc-500 uppercase font-bold font-mono">
+                  <span>Ventanas Activas</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      soundFxService.playClick();
+                      void refreshSources();
+                    }}
+                    className="text-[10px] text-zinc-500 hover:text-zinc-300 flex items-center gap-1 cursor-pointer"
+                    title="Actualizar ventanas"
+                  >
+                    <RefreshCw size={9} />
+                  </button>
+                </div>
+                <div className="max-h-24 overflow-y-auto space-y-0.5 mt-0.5 pr-0.5">
+                  {availableWindows.length > 0 ? (
+                    availableWindows.slice(0, 6).map((w) => {
+                      const isSelected = isScreenWatchActive && captureMode === 'window' && targetWindowId === w.id;
+                      return (
+                        <button
+                          key={w.id}
+                          type="button"
+                          className={`w-full flex items-center justify-between px-2 py-1 text-[11px] rounded-sm transition-colors text-left font-mono cursor-pointer truncate ${
+                            isSelected
+                              ? 'bg-zinc-800 border border-purple-600/80 text-purple-300'
+                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                          }`}
+                          onClick={() => {
+                            soundFxService.playClick();
+                            setTargetWindow(w.id, w.title);
+                            void startVisionPipeline({ mode: 'window', windowId: w.id, windowTitle: w.title });
+                            onClose?.();
+                          }}
+                          title={w.title}
+                        >
+                          <span className="flex items-center gap-1.5 truncate">
+                            {w.thumbnail ? (
+                              <img src={w.thumbnail} alt="" className="w-3.5 h-3.5 rounded-xs object-contain shrink-0" />
+                            ) : (
+                              <AppWindow size={11} className={isSelected ? 'text-purple-400 shrink-0' : 'text-zinc-500 shrink-0'} />
+                            )}
+                            <span className="truncate">{w.title}</span>
+                          </span>
+                          {isSelected && <Check size={10} className="shrink-0 text-purple-400" />}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void refreshSources()}
+                      className="w-full text-left py-0.5 px-2 text-[10px] text-zinc-500 hover:text-zinc-300 italic flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw size={9} />
+                      <span>Escanear ventanas abiertas...</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {(isScreenWatchActive || isCameraActive) && (
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-rose-300 hover:text-white hover:bg-rose-950/60 rounded-sm transition-colors text-left font-mono cursor-pointer"
+                  onClick={() => {
+                    soundFxService.playClick();
+                    stopVisionPipeline();
+                    onClose?.();
+                  }}
+                >
+                  <EyeOff size={12} className="text-rose-400 shrink-0" />
+                  <span>Detener Toda Visión</span>
+                </button>
+              )}
+
+              <div className="my-1 border-t border-zinc-800/60" />
+
+              <button
+                type="button"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-sm transition-colors text-left font-mono cursor-pointer"
                 onClick={() => { soundFxService.playClick(); props.onToggleLive2d?.(); }}
               >
                 {props.isLive2dVisible !== false ? <EyeOff size={12} className="text-zinc-400 shrink-0" /> : <Eye size={12} className="text-zinc-400 shrink-0" />}
@@ -390,7 +516,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(function Conte
               </button>
               {props.isLive2dVisible !== false && <button
                 type="button"
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-sm transition-colors text-left font-mono"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-sm transition-colors text-left font-mono cursor-pointer"
                 onClick={() => { soundFxService.playClick(); props.onToggleLive2dModel?.(); }}
               >
                 <RefreshCw size={12} className="text-zinc-400 shrink-0" />
@@ -399,7 +525,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(function Conte
 
               <button
                 type="button"
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-sm transition-colors text-left font-mono"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-sm transition-colors text-left font-mono cursor-pointer"
                 onClick={() => {
                   soundFxService.playClick();
                   onTogglePerformanceHUD?.();

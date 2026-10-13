@@ -290,9 +290,8 @@ export function useCompanionServices({ live2dRef }: UseCompanionServicesProps) {
             echoGateRef.current.setAudioPlaying(isPlaying);
             echoGateRef.current.setToolExecuting(activeTool || isToolRunningRef.current);
 
-            if (!echoGateRef.current.canTransmit()) {
-              // Self-echo elimination: drop microphone frames during assistant speech,
-              // tool execution, or acoustic reverberation decay
+            if (!echoGateRef.current.canTransmit(base64PCM)) {
+              // Gated only if barge-in disabled, below soft RMS threshold, or during reverberation decay
               return;
             }
 
@@ -325,6 +324,7 @@ export function useCompanionServices({ live2dRef }: UseCompanionServicesProps) {
         maxReconnectAttempts: 5,
         onOpen: () => {
           if (callGeneration !== callGenerationRef.current) return;
+          useSessionStore.getState().clearReconnectingState();
           useSessionStore.getState().dispatchConnection('SETUP_COMPLETE');
           proactiveTriggerService.setGeminiSocket(socket);
           proactiveScheduler.setGeminiSocket(socket);
@@ -332,14 +332,16 @@ export function useCompanionServices({ live2dRef }: UseCompanionServicesProps) {
         },
         onSetupComplete: () => {
           if (callGeneration !== callGenerationRef.current) return;
+          useSessionStore.getState().clearReconnectingState();
           // Open audio capture gate only when Gemini Live session setup is fully acknowledged
           if (!useAudioStore.getState().isMuted) {
             audioInRef.current?.unmute();
           }
         },
-        onReconnecting: () => {
+        onReconnecting: (attempt: number, delay: number) => {
           audioInRef.current?.mute();
           audioOutRef.current?.stopImmediate();
+          useSessionStore.getState().setReconnectingState(attempt, delay);
           useSessionStore.getState().dispatchConnection('RECONNECT');
         },
         onClose: (event: any) => {
@@ -355,10 +357,12 @@ export function useCompanionServices({ live2dRef }: UseCompanionServicesProps) {
           useVisionStore.getState().setIsScreenWatchActive(false);
           proactiveTriggerService.setGeminiSocket(null);
           proactiveScheduler.setGeminiSocket(null);
+          useSessionStore.getState().clearReconnectingState();
           useSessionStore.getState().dispatchConnection('DISCONNECT');
           useCompanionStore.getState().setIsSpeaking(false);
           useCompanionStore.getState().setIsListening(false);
           useCompanionStore.getState().setIsThinking(false);
+          useCompanionStore.getState().setThoughtText(null);
           useCompanionStore.getState().setActiveDecision(null);
           soundFxService.playDisconnect();
           if (event && !event.wasClean && event.code !== 1000) {
@@ -368,11 +372,13 @@ export function useCompanionServices({ live2dRef }: UseCompanionServicesProps) {
         onError: (err: any) => {
           logger.error('Live2D', 'Socket Live error:', err);
           useCompanionStore.getState().setIsThinking(false);
+          useCompanionStore.getState().setThoughtText(null);
           if (callGeneration !== callGenerationRef.current) return;
           useSessionStore.getState().setErrorMessage(`Error de conexión Live: ${err.message}`);
           if (!socket.isConnecting && !socket.reconnectTimer) {
             isCallActiveRef.current = false;
             audioInRef.current?.stop();
+            useSessionStore.getState().clearReconnectingState();
             useSessionStore.getState().dispatchConnection('FAIL');
           }
         },
@@ -386,8 +392,11 @@ export function useCompanionServices({ live2dRef }: UseCompanionServicesProps) {
           }
           audioOutRef.current?.signalGenerationComplete();
         },
-        onThoughtChunk: () => {
+        onThoughtChunk: (text?: string) => {
           useCompanionStore.getState().setIsThinking(true);
+          if (text) {
+            useCompanionStore.getState().appendThoughtText(text);
+          }
         },
         onAudioChunk: (base64PCM: string) => {
           if (useCompanionStore.getState().isThinking) {
@@ -438,11 +447,8 @@ export function useCompanionServices({ live2dRef }: UseCompanionServicesProps) {
           useCompanionStore.getState().setIsSpeaking(false);
         },
         onToolCall: async (functionCalls: any, sourceSocket: any) => {
-          // Temporarily mute microphone stream during tool execution to prevent
-          // ambient noise or audio chunks from colliding with server tool response processing
           isToolRunningRef.current = true;
           echoGateRef.current.setToolExecuting(true);
-          audioInRef.current?.mute();
           try {
             if (toolExecutorRef.current) {
               const responses = await toolExecutorRef.current.executeCalls(
@@ -456,6 +462,9 @@ export function useCompanionServices({ live2dRef }: UseCompanionServicesProps) {
           } finally {
             isToolRunningRef.current = false;
             echoGateRef.current.setToolExecuting(false);
+            if (!useAudioStore.getState().isMuted) {
+              audioInRef.current?.unmute();
+            }
           }
         }
       });
@@ -865,7 +874,7 @@ export function useCompanionServices({ live2dRef }: UseCompanionServicesProps) {
     if (!isClickThroughEnabled) {
       electronBridge.setIgnoreMouseEvents(false);
     } else if (electronBridge._interactionLockCount === 0) {
-      electronBridge.setIgnoreMouseEvents(true, { forward: true });
+      electronBridge.setIgnoreMouseEvents(true);
     }
   }, [isClickThroughEnabled]);
 

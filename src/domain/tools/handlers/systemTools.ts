@@ -685,31 +685,6 @@ export const searchDirectoryHandler: IToolHandler = {
   }
 };
 
-export const listOpenWindowsHandler: IToolHandler = {
-  name: 'list_open_windows',
-  declaration: {
-    name: 'list_open_windows',
-    description: 'Lista todas las ventanas de aplicaciones abiertas visibles en el escritorio de Windows con sus títulos, procesos y estados.'
-  },
-  async execute(_args?: unknown, context?: ToolExecutionContext) {
-    if (context?.signal?.aborted) return { status: 'cancelled', message: 'Consulta cancelada.', cancelled: true };
-    const bridge = (await getElectronBridge()) || bridgeProxy;
-    if (bridge?.listWindows) {
-      try {
-        const windows = await bridge.listWindows();
-        return {
-          status: 'success',
-          count: windows.length,
-          windows
-        };
-      } catch (e: any) {
-        return { status: 'error', message: e?.message };
-      }
-    }
-    return { status: 'error', message: 'No disponible fuera de Electron.' };
-  }
-};
-
 export const focusWindowHandler: IToolHandler = {
   name: 'focus_window',
   declaration: {
@@ -868,7 +843,6 @@ export const systemTools: IToolHandler[] = [
   moveFileHandler,
   listDirectoryHandler,
   searchDirectoryHandler,
-  listOpenWindowsHandler,
   focusWindowHandler,
   manageWindowHandler,
   listInstalledAppsHandler,
